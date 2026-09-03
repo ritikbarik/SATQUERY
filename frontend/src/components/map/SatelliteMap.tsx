@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Compass, Eye, Layers, Map as MapIcon, Mountain, Shield } from "lucide-react";
+import { Compass, Eye, EyeOff, Layers, Map as MapIcon, Mountain, Shield } from "lucide-react";
 import type { Map as LeafletMap } from "leaflet";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { MapLayers } from "./MapLayers";
@@ -13,6 +13,7 @@ interface SatelliteMapProps {
   features: GeoFeature[];
   isProcessing: boolean;
   onLayerToggle?: (layer: "vegetation" | "water" | "built" | "decrease" | "increase") => void;
+  onHideMap?: () => void;
 }
 
 type TileProvider = "arcgis" | "arcgis_clarity" | "arcgis_topo" | "sentinel";
@@ -78,6 +79,7 @@ export const SatelliteMap = ({
   activeLayerSet,
   features,
   isProcessing,
+  onHideMap,
 }: SatelliteMapProps) => {
   const mapRef = useRef<LeafletMap | null>(null);
   const [tileProvider, setTileProvider] = useState<TileProvider>("arcgis");
@@ -145,6 +147,19 @@ export const SatelliteMap = ({
             </div>
           )}
         </div>
+
+        {/* Hide Map Button */}
+        {onHideMap && (
+          <button
+            type="button"
+            className="layer-switch-btn hide-map-btn"
+            onClick={onHideMap}
+            title="Hide Map to focus on Data & Telemetry"
+          >
+            <EyeOff size={14} />
+            <span>Hide Map</span>
+          </button>
+        )}
       </div>
 
       {/* Compass Bearing */}
