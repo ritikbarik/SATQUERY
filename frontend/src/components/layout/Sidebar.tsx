@@ -1,5 +1,5 @@
 import React from "react";
-import { CircleHelp, Clock3, MessageSquareText, Settings, Star } from "lucide-react";
+import { Clock3, MessageSquareText, Settings, Star } from "lucide-react";
 import type { SidebarTab } from "../../App";
 
 interface SidebarProps {
@@ -12,7 +12,6 @@ const items: Array<{ label: string; icon: React.FC<{ size: number }>; tab: Sideb
   { label: "Recent Queries", icon: Clock3, tab: "recent" },
   { label: "Saved Results", icon: Star, tab: "saved" },
   { label: "Settings", icon: Settings, tab: "settings" },
-  { label: "Help & Support", icon: CircleHelp, tab: "help" },
 ];
 
 export const Sidebar = ({ activeTab, onTabChange }: SidebarProps) => (

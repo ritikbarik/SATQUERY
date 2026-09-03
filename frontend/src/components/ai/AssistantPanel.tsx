@@ -1,8 +1,7 @@
 import React from "react";
-import { Sparkles, Bot } from "lucide-react";
+import { Sparkles, Bot, Satellite, CheckCircle2 } from "lucide-react";
 import type { LocationMetadata, QueryIntent } from "../../types/satquery";
 import { TextHighlighter } from "../common/TextHighlighter";
-import { QueryInput } from "./QueryInput";
 import { SuggestedQueries } from "./SuggestedQueries";
 
 interface AssistantPanelProps {
@@ -19,8 +18,6 @@ interface AssistantPanelProps {
 }
 
 export const AssistantPanel: React.FC<AssistantPanelProps> = ({
-  input,
-  setInput,
   suggestions,
   isProcessing,
   error,
@@ -43,22 +40,17 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
           <div className="assistant-title-row">
             <strong>SatQuery Intelligence AI</strong>
             <span className="ai-badge">
-              <Sparkles size={10} /> Active
+              <Sparkles size={11} /> Agent Active
             </span>
           </div>
           <p className="assistant-sub">
-            Multispectral satellite analysis &amp; live telemetry across {locName}
+            Multispectral satellite synthesis &amp; live telemetry across {locName}
           </p>
         </div>
 
-        {/* Query input inside the header row on the right */}
-        <div style={{ marginLeft: "auto", flexShrink: 0, width: "340px" }}>
-          <QueryInput
-            value={input}
-            onChange={setInput}
-            onSubmit={() => onSubmit()}
-            isProcessing={isProcessing}
-          />
+        <div className="assistant-telemetry-badge">
+          <CheckCircle2 size={13} className="telemetry-ok" />
+          <span>Copernicus &amp; BigEarthNet Ready</span>
         </div>
       </div>
 
@@ -66,7 +58,10 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
       <div className="assistant-content-row">
         {/* Answer area */}
         <div className="answer-card-wrapper">
-          <div className="answer-card-label">AI Satellite Synthesis</div>
+          <div className="answer-card-label">
+            <Satellite size={12} />
+            <span>AI Satellite Synthesis</span>
+          </div>
           {error ? (
             <p className="error-state">{error}</p>
           ) : (
@@ -78,13 +73,13 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
             />
           )}
           <div className="highlight-hint">
-            💡 <em>Tip: Select or click any highlighted text to scan the satellite map or check weather.</em>
+            💡 <em>Click any highlighted metric or place to run immediate geospatial scans.</em>
           </div>
         </div>
 
         {/* Suggested queries */}
         <div className="suggested-queries-wrapper">
-          <div className="suggested-label">Recommended ({locName})</div>
+          <div className="suggested-label">Recommended Queries ({locName})</div>
           <SuggestedQueries
             queries={suggestions}
             onSelect={onSelectSuggestion}

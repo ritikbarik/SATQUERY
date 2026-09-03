@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { CalendarDays, ChevronDown, Clock3, Globe2, MapPin, Menu, Search, UserRound } from "lucide-react";
+import { CalendarDays, ChevronDown, Clock3, Globe2, LogIn, LogOut, MapPin, Menu, Search, Settings, UserRound } from "lucide-react";
 import type { LocationMetadata } from "../../types/satquery";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface TopBarProps {
   location?: LocationMetadata;
   onLocationSelect?: (locName: string) => void;
+  onOpenSettings?: () => void;
 }
 
 const POPULAR_REGIONS = [
@@ -25,8 +27,10 @@ const POPULAR_REGIONS = [
   "Goa, India",
 ];
 
-export const TopBar: React.FC<TopBarProps> = ({ location, onLocationSelect }) => {
+export const TopBar: React.FC<TopBarProps> = ({ location, onLocationSelect, onOpenSettings }) => {
+  const { user, signOut } = useAuth();
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [customSearch, setCustomSearch] = useState("");
   const [currentTime, setCurrentTime] = useState("");
   const [currentDate, setCurrentDate] = useState("");
@@ -64,11 +68,20 @@ export const TopBar: React.FC<TopBarProps> = ({ location, onLocationSelect }) =>
     }
   };
 
+  const avatar = user?.user_metadata?.avatar_url;
+  const fullName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Guest Analyst";
+  const userRole = user ? "Verified Operator" : "Demo Mode";
+
   return (
     <header className="topbar">
       <div className="brand-cluster">
-        <button className="icon-button large" aria-label="Open navigation menu">
-          <Menu size={24} />
+        <button
+          className="icon-button large"
+          aria-label="Open navigation menu"
+          onClick={onOpenSettings}
+          title="Open Settings"
+        >
+          <Menu size={22} />
         </button>
         <div>
           <h1>
@@ -106,7 +119,7 @@ export const TopBar: React.FC<TopBarProps> = ({ location, onLocationSelect }) =>
               <button type="submit" className="go-btn">Go</button>
             </form>
 
-            <div className="dropdown-label">Popular Indian Regions & States</div>
+            <div className="dropdown-label">Popular Indian Regions &amp; States</div>
             <div className="dropdown-region-grid">
               {POPULAR_REGIONS.map((region) => (
                 <button
@@ -130,25 +143,72 @@ export const TopBar: React.FC<TopBarProps> = ({ location, onLocationSelect }) =>
         <div>
           <CalendarDays size={18} />
           <span>Date</span>
-          <strong>{currentDate || "25 Aug 2026"}</strong>
+          <strong>{currentDate || "Live Data"}</strong>
         </div>
         <div>
           <Clock3 size={18} />
           <span>Live Clock</span>
-          <strong>{currentTime || "07:45 PM IST"}</strong>
+          <strong>{currentTime || "IST"}</strong>
         </div>
       </div>
 
-      <button className="user-menu" aria-label="Open user menu">
-        <span className="avatar">
-          <UserRound size={20} />
-        </span>
-        <span>
-          <small>Operator</small>
-          <strong>Research Analyst</strong>
-        </span>
-        <ChevronDown size={16} />
-      </button>
+      {/* User menu with interactive dropdown */}
+      <div className="user-menu-wrapper">
+        <button
+          className="user-menu"
+          aria-label="Open user menu"
+          onClick={() => setShowUserDropdown(!showUserDropdown)}
+        >
+          <span className="avatar">
+            {avatar ? (
+              <img src={avatar} alt={fullName} referrerPolicy="no-referrer" />
+            ) : (
+              <UserRound size={20} />
+            )}
+          </span>
+          <span>
+            <small>{userRole}</small>
+            <strong>{fullName}</strong>
+          </span>
+          <ChevronDown size={15} />
+        </button>
+
+        {showUserDropdown && (
+          <div className="user-dropdown">
+            <button
+              onClick={() => {
+                setShowUserDropdown(false);
+                onOpenSettings?.();
+              }}
+            >
+              <Settings size={15} />
+              <span>Settings &amp; Theme</span>
+            </button>
+            {user ? (
+              <button
+                className="danger"
+                onClick={() => {
+                  setShowUserDropdown(false);
+                  signOut();
+                }}
+              >
+                <LogOut size={15} />
+                <span>Sign Out</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setShowUserDropdown(false);
+                  onOpenSettings?.();
+                }}
+              >
+                <LogIn size={15} />
+                <span>Sign In with OAuth</span>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
     </header>
   );
 };

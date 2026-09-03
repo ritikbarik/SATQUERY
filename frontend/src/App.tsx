@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AssistantPanel } from "./components/ai/AssistantPanel";
+import { HeroQuery } from "./components/ai/HeroQuery";
 import { BottomNav } from "./components/layout/BottomNav";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TopBar } from "./components/layout/TopBar";
@@ -8,10 +9,11 @@ import { AnalysisSummary } from "./components/panels/AnalysisSummary";
 import { AreaInformation } from "./components/panels/AreaInformation";
 import { RecentQueries } from "./components/panels/RecentQueries";
 import { SavedResults } from "./components/panels/SavedResults";
+import { SettingsPanel } from "./components/panels/SettingsPanel";
 import { WeatherCard } from "./components/panels/WeatherCard";
 import { useSatQuery } from "./hooks/useSatQuery";
 
-export type SidebarTab = "ask" | "recent" | "saved" | "settings" | "help";
+export type SidebarTab = "ask" | "recent" | "saved" | "settings";
 
 const App = () => {
   const satQuery = useSatQuery();
@@ -32,27 +34,7 @@ const App = () => {
       case "saved":
         return <SavedResults />;
       case "settings":
-        return (
-          <div className="settings-panel glass-card">
-            <div className="card-title">
-              <span>Settings</span>
-            </div>
-            <div className="settings-body">
-              <p className="muted">Settings and preferences coming soon.</p>
-            </div>
-          </div>
-        );
-      case "help":
-        return (
-          <div className="help-panel glass-card">
-            <div className="card-title">
-              <span>Help & Support</span>
-            </div>
-            <div className="settings-body">
-              <p className="muted">Documentation and help resources.</p>
-            </div>
-          </div>
-        );
+        return <SettingsPanel />;
       default:
         return (
           <AreaInformation
@@ -68,7 +50,9 @@ const App = () => {
       <TopBar
         location={satQuery.location}
         onLocationSelect={satQuery.selectRegion}
+        onOpenSettings={() => setActiveTab("settings")}
       />
+
       <div className="dashboard-grid">
         {/* Left sidebar nav */}
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
@@ -78,13 +62,25 @@ const App = () => {
           {renderLeftPanel()}
         </aside>
 
-        {/* Central map */}
-        <SatelliteMap
-          location={satQuery.location}
-          activeLayerSet={satQuery.activeLayerSet}
-          features={satQuery.features}
-          isProcessing={satQuery.isProcessing}
-        />
+        {/* Central map with Highlighted Middle Hero Query */}
+        <div className="center-viewport-wrapper">
+          {/* Main Hero Query centered right in the middle */}
+          <HeroQuery
+            value={satQuery.input}
+            onChange={satQuery.setInput}
+            onSubmit={(customQ) => satQuery.runQuery(customQ || satQuery.input)}
+            isProcessing={satQuery.isProcessing}
+            suggestions={satQuery.suggestedQueries}
+            onSelectSuggestion={satQuery.selectSuggestion}
+          />
+
+          <SatelliteMap
+            location={satQuery.location}
+            activeLayerSet={satQuery.activeLayerSet}
+            features={satQuery.features}
+            isProcessing={satQuery.isProcessing}
+          />
+        </div>
 
         {/* Right panel stack */}
         <aside className="right-stack">
@@ -113,6 +109,7 @@ const App = () => {
           onSubmit={(customQ) => satQuery.runQuery(customQ || satQuery.input)}
         />
       </div>
+
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </main>
   );

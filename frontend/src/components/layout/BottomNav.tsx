@@ -1,5 +1,5 @@
 import React from "react";
-import { CircleHelp, Clock3, MessageSquareText, Settings, Star } from "lucide-react";
+import { Clock3, MessageSquareText, Settings, Star } from "lucide-react";
 import type { SidebarTab } from "../../App";
 
 interface BottomNavProps {
@@ -12,7 +12,6 @@ const items: Array<{ label: string; icon: React.FC<{ size: number }>; tab: Sideb
   { label: "Recent", icon: Clock3, tab: "recent" },
   { label: "Saved", icon: Star, tab: "saved" },
   { label: "Settings", icon: Settings, tab: "settings" },
-  { label: "Help", icon: CircleHelp, tab: "help" },
 ];
 
 export const BottomNav = ({ activeTab, onTabChange }: BottomNavProps) => (
