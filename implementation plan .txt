@@ -1,0 +1,934 @@
+SATQUERY AI — ALL-INDIA IMPLEMENTATION PLAN
+================================================
+
+1. PROJECT OBJECTIVE
+--------------------
+Transform SatQuery AI from an Odisha-focused prototype into an all-India,
+real-time satellite intelligence dashboard.
+
+The upgraded system will provide:
+- Natural-language satellite image analysis
+- India-wide location search
+- Real-time weather and soil information
+- Dynamic satellite map layers
+- NDVI, NDWI and NDBI analysis
+- Urban growth and change detection
+- Optical + SAR analysis
+- Interactive AI response highlighting
+- Contextual actions on selected text
+- Evidence-backed responses with confidence scores
+
+
+2. HIGH-LEVEL SYSTEM ARCHITECTURE
+---------------------------------
+
+User
+  |
+  v
+React.js + TypeScript Frontend
+  |
+  v
+FastAPI Backend
+  |
+  +--> Query Parser
+  |
+  +--> Location Extractor
+  |       |
+  |       v
+  |    Nominatim
+  |
+  +--> Weather Service
+  |       |
+  |       v
+  |    Open-Meteo
+  |
+  +--> Satellite / Geospatial Engine
+  |
+  +--> Agent Controller
+          |
+          +--> Intent Classification
+          |
+          +--> Captioning
+          +--> VQA
+          +--> Grounding
+          +--> Change Detection
+          +--> Optical-SAR Fusion
+          |
+          v
+    Evidence Aggregation
+          |
+          v
+    Confidence + Explanation
+          |
+          v
+    React Interactive Dashboard
+
+
+3. FRONTEND IMPLEMENTATION
+--------------------------
+
+Technologies:
+- React.js
+- TypeScript
+- React-Leaflet / Leaflet
+- GeoJSON
+- HTML/CSS
+
+Main components:
+- TopBar
+- Query Input
+- AI Response Panel
+- SatelliteMap
+- WeatherCard
+- AreaInformation
+- Analysis Results
+- TextHighlighter
+
+Frontend responsibilities:
+1. Provide natural-language query input.
+2. Provide an India-wide location search.
+3. Display an interactive satellite map.
+4. Automatically fly to the selected location.
+5. Switch between map layers.
+6. Display dynamic GeoJSON analysis overlays.
+7. Display live weather and environmental information.
+8. Highlight important entities in AI responses.
+9. Display contextual actions when text is selected.
+10. Provide loading states and responsive UI.
+
+
+4. BACKEND IMPLEMENTATION
+-------------------------
+
+Technologies:
+- Python
+- FastAPI
+- httpx / aiohttp
+- asyncio
+- LRU / async-LRU caching
+
+Backend responsibilities:
+1. Receive user queries.
+2. Parse natural-language questions.
+3. Extract locations and analysis intent.
+4. Resolve Indian locations to coordinates.
+5. Fetch real-time weather data.
+6. Run satellite/geospatial analysis.
+7. Route requests to appropriate AI models.
+8. Generate GeoJSON features.
+9. Aggregate model outputs.
+10. Return confidence scores and evidence.
+
+
+5. NATURAL-LANGUAGE QUERY ENGINE
+--------------------------------
+
+Technology:
+- Python
+- FastAPI
+- LangChain
+- NLP/query parsing
+
+Example queries:
+
+"Show water bodies near Chilika Lake"
+"NDVI for Punjab farms"
+"Urban expansion in Pune"
+"Weather and forest cover in Western Ghats"
+"Change detection near Bengaluru"
+
+The parser should extract:
+
+- Location
+- Intent
+- Analysis type
+- Data type
+- Time period, when provided
+- Required AI/geospatial task
+
+
+6. INDIA-WIDE GEOCODING
+-----------------------
+
+Primary service:
+- OpenStreetMap Nominatim
+
+Fallback:
+- Local in-memory India location dataset
+
+The geocoding service should support:
+- 28 Indian States
+- 8 Union Territories
+- Major Indian cities
+- Agricultural regions
+- Forest belts
+- Major water bodies
+
+Output:
+- Location name
+- Latitude
+- Longitude
+- Bounding box
+- Region metadata
+
+Flow:
+
+User Location
+    |
+    v
+Location Parser
+    |
+    v
+Nominatim
+    |
+    v
+Coordinates + Bounding Box
+    |
+    v
+Analysis Region
+
+
+7. REAL-TIME WEATHER ENGINE
+---------------------------
+
+Primary API:
+- Open-Meteo
+
+HTTP client:
+- httpx / aiohttp
+
+Data to retrieve:
+- Temperature
+- Relative humidity
+- Wind speed
+- Wind direction
+- Cloud cover
+- Weather code
+- Soil moisture
+- UV / solar radiation
+
+Flow:
+
+Coordinates
+    |
+    v
+Weather Service
+    |
+    v
+Open-Meteo
+    |
+    v
+FastAPI
+    |
+    v
+React Weather Card
+
+The backend should cache repeated coordinate/weather requests when
+appropriate.
+
+
+8. SATELLITE AND GEOSPATIAL ENGINE
+----------------------------------
+
+Technologies:
+- GDAL
+- Rasterio
+- OpenCV
+- GeoJSON
+
+Supported imagery:
+- GeoTIFF
+- TIFF
+- PNG/JPEG for benchmark/demo use
+- Optical imagery
+- SAR imagery
+- Bi-temporal imagery
+
+Processing pipeline:
+
+Satellite Image
+    |
+    v
+Image Validation
+    |
+    v
+Metadata Validation
+    |
+    v
+Pre-processing
+    |
+    v
+Spectral / Image Analysis
+    |
+    v
+Feature Generation
+    |
+    v
+GeoJSON
+    |
+    v
+Leaflet Map
+
+
+9. REMOTE-SENSING ANALYTICS
+---------------------------
+
+NDVI:
+NDVI = (NIR - Red) / (NIR + Red)
+
+Purpose:
+- Vegetation health
+- Vegetation density
+- Agricultural monitoring
+
+NDWI:
+NDWI = (Green - NIR) / (Green + NIR)
+
+Purpose:
+- Water-body detection
+- Surface water analysis
+
+NDBI:
+NDBI = (SWIR - NIR) / (SWIR + NIR)
+
+Purpose:
+- Built-up area analysis
+- Urban expansion
+- Infrastructure growth
+
+Additional analysis:
+- Change detection
+- Multi-temporal analysis
+- Urban sprawl
+- Water detection
+- Vegetation analysis
+- Optical + SAR fusion
+
+
+10. AGENTIC AI CONTROLLER
+-------------------------
+
+The Agent Controller acts as the central decision-making layer.
+
+Flow:
+
+User Query
+    |
+    v
+Agent Controller
+    |
+    v
+Intent Classification
+    |
+    +--> Captioning
+    |
+    +--> VQA
+    |
+    +--> Grounding
+    |
+    +--> Change Analysis
+    |
+    +--> SAR Fusion
+    |
+    +--> Temporal Reasoning
+    |
+    v
+Evidence Aggregation
+    |
+    v
+Confidence Score
+    |
+    v
+Final Report
+
+The controller automatically selects the required workflow instead of
+requiring the user to manually select a model.
+
+
+11. AI / ML STACK
+-----------------
+
+Frameworks:
+- PyTorch
+- Hugging Face
+- LangChain
+- FAISS
+
+Models and components:
+
+BLIP-2 / LLaVA
+- Image captioning
+- Visual Question Answering
+
+RemoteCLIP
+- Image-text semantic understanding
+- Vision-language retrieval
+
+GroundingDINO
+- Text-guided object detection
+- Object grounding
+
+SAM
+- Image segmentation
+
+ChangeStar / CDVQA
+- Multi-temporal change analysis
+- Change understanding
+
+Optical-SAR Fusion Network
+- Optical + SAR multimodal feature extraction
+
+FAISS
+- Vector similarity search / retrieval
+
+
+12. DYNAMIC SATELLITE MAP
+-------------------------
+
+Frontend:
+- React-Leaflet / Leaflet
+
+Map layers:
+1. Esri World Imagery
+2. Sentinel-2 Cloudless / Sentinel imagery layer
+3. OpenTopoMap
+4. CartoDB Dark Matter
+
+Analysis overlays:
+- NDVI
+- NDWI
+- NDBI
+- Water bodies
+- Built-up regions
+- Vegetation regions
+- Change detection
+
+Map behavior:
+- India-wide initial extent
+- Dynamic location centering
+- Smooth flyTo animation
+- Layer selector
+- GeoJSON overlays
+- Interactive feature information
+
+
+13. INTERACTIVE TEXT HIGHLIGHTING
+---------------------------------
+
+Component:
+frontend/src/components/common/TextHighlighter.tsx
+
+Functions:
+- Detect important entities
+- Highlight locations
+- Highlight metrics
+- Highlight percentages
+- Highlight dates
+- Highlight environmental alerts
+- Detect user-selected text
+
+Contextual actions:
+
+Search this area
+Analyze NDVI
+Check Weather
+Analyze Water
+Show on Map
+
+Example:
+
+"Punjab vegetation has an NDVI of 0.67 and vegetation health is GOOD."
+
+Punjab
+  -> Search / Show on Map
+
+0.67 NDVI
+  -> Analyze NDVI
+
+GOOD
+  -> View vegetation interpretation
+
+
+14. PERFORMANCE OPTIMIZATION
+----------------------------
+
+Backend:
+- Async HTTP requests
+- httpx / aiohttp
+- asyncio
+- Connection pooling
+- LRU caching
+- async-LRU caching
+- Parallel API/model execution
+
+Frontend:
+- Debounced search
+- Optimistic UI
+- Skeleton loaders
+- Non-blocking rendering
+- Efficient map updates
+- Cached repeated queries
+
+Parallel execution concept:
+
+             Query
+               |
+       +-------+-------+
+       |       |       |
+       v       v       v
+    Weather  Geocode  Satellite
+       |       |       |
+       +-------+-------+
+               |
+               v
+              AI
+               |
+               v
+            Response
+
+
+15. BACKEND PROJECT STRUCTURE
+----------------------------
+
+backend/
+|
++-- app/
+|   |
+|   +-- routes/
+|   |   +-- query.py
+|   |   +-- weather.py
+|   |   +-- geocode.py
+|   |
+|   +-- services/
+|   |   +-- query_parser.py
+|   |   +-- geocoding_service.py
+|   |   +-- weather_service.py
+|   |   +-- satellite_service.py
+|   |   +-- analysis_engine.py
+|   |   +-- geojson_service.py
+|   |   +-- agent_controller.py
+|   |
+|   +-- models/
+|   +-- main.py
+|
++-- requirements.txt
+
+
+16. FRONTEND PROJECT STRUCTURE
+------------------------------
+
+frontend/
+|
++-- src/
+    |
+    +-- components/
+    |   +-- common/
+    |   |   +-- TextHighlighter.tsx
+    |   |
+    |   +-- map/
+    |   |   +-- SatelliteMap.tsx
+    |   |
+    |   +-- panels/
+    |   |   +-- WeatherCard.tsx
+    |   |   +-- AreaInformation.tsx
+    |   |
+    |   +-- layout/
+    |       +-- TopBar.tsx
+    |
+    +-- hooks/
+    |   +-- useSatQuery.ts
+    |
+    +-- types/
+    |   +-- satquery.ts
+    |
+    +-- App.tsx
+
+
+17. API DESIGN
+--------------
+
+POST /api/query
+- Main natural-language analysis endpoint
+
+GET /api/geocode
+- Resolve location to coordinates and bounds
+
+GET /api/weather
+- Retrieve live weather/environmental data
+
+POST /api/analysis
+- Run specific geospatial analysis
+
+GET /api/geojson
+- Retrieve dynamic GeoJSON features
+
+GET /api/health
+- Backend health check
+
+
+Example query:
+
+POST /api/query
+
+{
+  "question": "NDVI vegetation analysis for Punjab",
+  "location": "Punjab, India"
+}
+
+Example response structure:
+
+{
+  "answer": "...",
+  "location": {
+    "name": "Punjab",
+    "latitude": 31.1471,
+    "longitude": 75.3412
+  },
+  "weather": {},
+  "analysis": {
+    "ndvi": 0.67,
+    "ndwi": 0.21,
+    "ndbi": 0.14
+  },
+  "geojson": {},
+  "confidence": 0.91
+}
+
+
+18. DATASETS
+------------
+
+Training / adaptation / evaluation datasets:
+
+- BigEarthNet
+- Sentinel-1
+- Sentinel-2
+- RSVQA
+- VRSBench
+- CDVQA
+
+Dataset purposes:
+
+BigEarthNet
+- Remote-sensing domain adaptation
+- Image-text alignment
+
+Sentinel-1
+- SAR structural information
+- All-weather imaging
+
+Sentinel-2
+- Multispectral land-cover analysis
+
+RSVQA
+- Visual Question Answering benchmark
+
+VRSBench
+- Captioning and grounding evaluation
+
+CDVQA
+- Multi-temporal change understanding
+
+
+19. TESTING AND VERIFICATION
+----------------------------
+
+Backend tests:
+
+1. Chilika Lake
+   Query: Find water bodies near Chilika Lake
+
+2. Punjab
+   Query: NDVI vegetation analysis for Punjab
+
+3. Bengaluru
+   Query: Urban growth in Bengaluru
+
+4. Western Ghats / Kerala
+   Query: Weather and forest cover in Western Ghats
+
+Additional location tests:
+- Mumbai
+- Delhi
+- Jaipur
+- Assam
+- Ladakh
+
+Verify:
+- Query parsing
+- Location extraction
+- Coordinates
+- Bounding box
+- Weather response
+- GeoJSON generation
+- NDVI / NDWI / NDBI
+- AI task routing
+- Confidence score
+
+
+20. BROWSER / UI TESTING
+-----------------------
+
+Verify:
+
+- India-wide map loads
+- Location search works
+- Map flyTo works
+- Satellite layers switch correctly
+- Weather card updates
+- GeoJSON overlays render
+- AI response highlighting works
+- Text selection displays contextual actions
+- Loading states work
+- Dashboard remains responsive
+
+
+21. DEPLOYMENT
+-------------
+
+Frontend:
+- React production build
+
+Backend:
+- FastAPI
+
+AI:
+- PyTorch + Hugging Face
+
+Inference:
+- GPU-enabled server
+
+Recommended hardware:
+- RTX 3060+ for inference
+- RTX 4090 / A100 / TPU for training or heavy model workloads
+
+Deployment:
+- Cloud-based deployment
+- Environment variables using .env
+- Optional Google Earth Engine adapter
+
+The architecture should allow Google Earth Engine credentials to be added later
+without making GEE a mandatory dependency.
+
+
+22. FINAL TECHNOLOGY STACK
+--------------------------
+
+Frontend:
+React.js
+TypeScript
+React-Leaflet
+Leaflet
+GeoJSON
+HTML/CSS
+
+Backend:
+Python
+FastAPI
+httpx
+aiohttp
+asyncio
+LRU / async-LRU
+
+AI / ML:
+PyTorch
+Hugging Face
+LangChain
+FAISS
+BLIP-2
+LLaVA
+RemoteCLIP
+
+Computer Vision:
+GroundingDINO
+SAM
+OpenCV
+
+Remote Sensing:
+ChangeStar
+CDVQA
+Optical-SAR Fusion
+NDVI
+NDWI
+NDBI
+Change Detection
+
+Geospatial:
+GDAL
+Rasterio
+GeoJSON
+
+Real-Time APIs:
+Open-Meteo
+OpenStreetMap Nominatim
+
+Map / Satellite Layers:
+Esri World Imagery
+Sentinel-2 Cloudless
+OpenTopoMap
+CartoDB Dark Matter
+
+Datasets:
+BigEarthNet
+Sentinel-1
+Sentinel-2
+RSVQA
+VRSBench
+CDVQA
+
+Deployment:
+Cloud
+GPU
+
+
+23. IMPLEMENTATION ORDER
+------------------------
+
+STEP 1
+Set up React + TypeScript frontend and FastAPI backend.
+
+STEP 2
+Implement the /api/query endpoint and basic frontend-backend communication.
+
+STEP 3
+Implement the natural-language query parser.
+
+STEP 4
+Implement Nominatim geocoding and the Indian location fallback dataset.
+
+STEP 5
+Implement Open-Meteo weather service.
+
+STEP 6
+Implement dynamic map positioning and satellite tile layers.
+
+STEP 7
+Implement GDAL/Rasterio/OpenCV image processing.
+
+STEP 8
+Implement NDVI, NDWI and NDBI analysis.
+
+STEP 9
+Implement dynamic GeoJSON generation and map overlays.
+
+STEP 10
+Integrate the Agent Controller and automatic intent routing.
+
+STEP 11
+Integrate BLIP-2/LLaVA, RemoteCLIP, GroundingDINO, SAM and
+ChangeStar/CDVQA according to task requirements.
+
+STEP 12
+Implement Optical-SAR fusion and multi-temporal analysis.
+
+STEP 13
+Implement evidence aggregation and confidence scoring.
+
+STEP 14
+Implement TextHighlighter and contextual selection actions.
+
+STEP 15
+Add caching, asynchronous execution and frontend performance optimization.
+
+STEP 16
+Perform backend API testing across multiple Indian regions.
+
+STEP 17
+Perform complete browser/UI verification.
+
+STEP 18
+Deploy the frontend and backend to a cloud GPU environment.
+
+
+24. END-TO-END IMPLEMENTATION FLOW
+----------------------------------
+
+User
+  |
+  v
+Natural Language Query
+  |
+  v
+React + TypeScript
+  |
+  v
+FastAPI
+  |
+  v
+Query Parser
+  |
+  +----------------------+
+  |                      |
+  v                      v
+Location Extraction    Intent Detection
+  |                      |
+  v                      v
+Nominatim             Agent Controller
+  |                      |
+  v              +-------+-------+
+Coordinates       |       |       |
+Bounds            v       v       v
+  |            VQA   Grounding Change
+  |                    |       Detection
+  v                    |       |
+Weather API             +---+---+
+  |                        |
+  v                        v
+Open-Meteo          Specialized AI Models
+  |                        |
+  +-----------+------------+
+              |
+              v
+     Geospatial Analysis
+              |
+       +------+------+------+
+       |      |      |      |
+      NDVI   NDWI   NDBI  Change
+       |      |      |      |
+       +------+------+------+
+              |
+              v
+        GeoJSON Features
+              |
+              v
+        Leaflet Map
+              |
+              v
+      Evidence Aggregation
+              |
+              v
+      Confidence + Explanation
+              |
+              v
+       Interactive AI Answer
+              |
+              v
+       Text Highlighting
+              |
+              v
+      Contextual Actions
+
+
+25. FINAL GOAL
+--------------
+
+SatQuery AI will provide a unified, India-wide satellite intelligence platform
+where a user can simply ask a natural-language question, select a region,
+receive live environmental information, analyze satellite imagery, visualize
+the results on an interactive map, and obtain an evidence-backed AI response.
+
+Core principle:
+
+Natural Language
+      +
+Real-Time Data
+      +
+Satellite Imagery
+      +
+Geospatial Analytics
+      +
+Agentic AI
+      +
+Interactive Visualization
+      =
+All-India SatQuery Intelligence Engine

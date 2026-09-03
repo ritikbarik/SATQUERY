@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+backend/venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build outputs
+frontend/dist/
+dist/
+.vite/
+
+# Large Datasets (>100MB cannot be pushed to standard GitHub without Git LFS)
+BigEarthNet.txt.parquet
+*.parquet
+
+# Environment & Local
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
