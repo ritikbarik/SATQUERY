@@ -1,13 +1,10 @@
 services:
   - type: web
     name: satquery-backend
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
     plan: free
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: MAPPLS_KEY
         value: blxdfrmzcqmrmwomxwfkbmarrnmxmwgbrgii

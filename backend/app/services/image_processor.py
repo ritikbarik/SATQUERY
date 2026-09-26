@@ -17,9 +17,17 @@ import math
 from typing import Any
 import numpy as np
 from PIL import Image
-import rasterio
-from rasterio.io import MemoryFile
-from rasterio.warp import transform_bounds
+try:
+    import rasterio
+    from rasterio.io import MemoryFile
+    from rasterio.warp import transform_bounds
+    HAS_RASTERIO = True
+except (ImportError, Exception):
+    HAS_RASTERIO = False
+    rasterio = None
+    MemoryFile = None
+    transform_bounds = None
+
 
 
 class ProcessedImageResult:
@@ -118,7 +126,7 @@ def process_uploaded_image(file_bytes: bytes, filename: str) -> ProcessedImageRe
     # -------------------------------------------------------------------------
     # 1. Attempt Rasterio reading (Handles GeoTIFF / TIFF with geospatial tags)
     # -------------------------------------------------------------------------
-    if is_tiff:
+    if is_tiff and HAS_RASTERIO and MemoryFile is not None:
         try:
             with MemoryFile(file_bytes) as memfile:
                 with memfile.open() as src:
