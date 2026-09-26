@@ -82,21 +82,49 @@ def parse_query(request: QueryRequest) -> ParsedQueryIntent:
 
 
 def extract_location_name(q_lower: str, default_location: str) -> str | None:
-    # Check known Indian locations first
-    for key, data in INDIA_REGIONS.items():
-        if key in q_lower:
-            return data["regionName"]
+    # 1. Match known Indian locations using word boundaries (longest key first)
+    for key in sorted(INDIA_REGIONS.keys(), key=len, reverse=True):
+        if key == "india":
+            continue
+        if re.search(r"\b" + re.escape(key) + r"\b", q_lower):
+            return INDIA_REGIONS[key]["regionName"]
 
-    # Regex patterns for prepositions: "in Mumbai", "near Bengaluru", "of Delhi", "around Jaipur"
-    match = re.search(r"\b(?:in|near|around|at|of|for|across)\s+([a-zA-Z\s]{3,25})\b", q_lower)
+    # 2. Extract after action verbs: "analyse X", "analyze X", "check X", "scan X", "examine X", "map X", "show X"
+    action_match = re.search(
+        r"\b(?:analyse|analyze|scan|check|inspect|examine|explore|map|view|about)\s+([a-zA-Z\s]{3,30})\b",
+        q_lower,
+    )
+    if action_match:
+        cand = action_match.group(1).strip()
+        cand = re.sub(
+            r"\b(this|the|area|region|city|village|satellite|image|imagery|telemetry|water|bodies|vegetation|change|growth|infrastructure|ndvi|cover)\b",
+            "",
+            cand,
+            flags=re.I,
+        ).strip()
+        if len(cand) >= 3:
+            return cand.title()
+
+    # 3. Regex patterns for prepositions: "in Mumbai", "near Bengaluru", "of Delhi", "around Jaipur"
+    match = re.search(r"\b(?:in|near|around|at|of|for|across|to)\s+([a-zA-Z\s]{3,25})\b", q_lower)
     if match:
         candidate = match.group(1).strip()
-        # Filter out common false keywords
-        if candidate not in ["this area", "this village", "the region", "the city", "vegetation", "water bodies", "construction"]:
-            return candidate.title()
+        cand_clean = re.sub(
+            r"\b(this|the|area|region|city|village|vegetation|water|bodies|construction|expansion|roads|canopy|forest|ndvi)\b",
+            "",
+            candidate,
+            flags=re.I,
+        ).strip()
+        if len(cand_clean) >= 3:
+            return cand_clean.title()
 
     if default_location and default_location.lower() not in ["india", "all"]:
         return default_location
+
+    # 4. If query is a direct place name (e.g. "Kochi" or "Surat")
+    tokens = [t for t in q_lower.split() if t not in ["show", "find", "water", "ndvi", "weather", "change", "the", "in", "is"]]
+    if len(tokens) == 1 and len(tokens[0]) >= 3:
+        return tokens[0].title()
 
     return None
 

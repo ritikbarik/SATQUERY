@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { submitSatQuery, fetchWeatherData } from "../services/satQueryApi";
 import type {
+  AgentDetailedReport,
   AnalysisResult,
   GeoFeature,
   LocationMetadata,
@@ -10,16 +11,16 @@ import type {
 } from "../types/satquery";
 
 const DEFAULT_LOCATION: LocationMetadata = {
-  displayName: "Odisha, India",
-  regionName: "Odisha",
-  state: "Odisha",
+  displayName: "All-India Overview",
+  regionName: "India",
+  state: "",
   country: "India",
-  lat: 20.2961,
-  lng: 85.8245,
-  boundingBox: [17.78, 22.57, 81.37, 87.53],
-  areaKm2: 155707.0,
-  elevationMeters: 158,
-  coordinatesDisplay: "20.2961° N, 85.8245° E",
+  lat: 22.5,
+  lng: 82.0,
+  boundingBox: [8.0, 37.0, 68.0, 97.0],
+  areaKm2: 3287263.0,
+  elevationMeters: 160,
+  coordinatesDisplay: "22.5000° N, 82.0000° E",
 };
 
 const DEFAULT_WEATHER: WeatherData = {
@@ -36,59 +37,33 @@ const DEFAULT_WEATHER: WeatherData = {
 };
 
 const DEFAULT_ANALYSIS: AnalysisResult = {
-  intent: "vegetation-loss",
-  title: "Vegetation Canopy Analysis - Odisha",
-  metrics: [
-    { label: "Water Bodies", value: "37 detected", tone: "water" },
-    { label: "Vegetation Cover", value: "63.4%", tone: "vegetation" },
-    { label: "Built-up Area", value: "12.8%", tone: "built" },
-    { label: "Vegetation Change", value: "-18.4%", tone: "decrease" },
-  ],
-  confidence: 91,
-  activeLayers: ["vegetation", "water", "built", "decrease"],
-  meanNdvi: 0.61,
-  ndwi: 0.28,
-  soilMoisture: 28.5,
+  intent: "vqa",
+  title: "Awaiting Remote-Sensing Analysis",
+  metrics: [],
+  confidence: 0,
+  activeLayers: ["vegetation", "water"],
+  meanNdvi: undefined,
+  ndwi: undefined,
+  ndbi: undefined,
+  sarBackscatterDb: undefined,
 };
 
-export const useSatQuery = () => {
+export const useSatQuery = (opts?: {
+  onQuerySuccess?: (queryText: string, location?: LocationMetadata, analysis?: AnalysisResult) => void;
+}) => {
+  const onQuerySuccess = opts?.onQuerySuccess;
+
   const [input, setInput] = useState("");
   const [location, setLocation] = useState<LocationMetadata>(DEFAULT_LOCATION);
   const [weather, setWeather] = useState<WeatherData>(DEFAULT_WEATHER);
   const [analysis, setAnalysis] = useState<AnalysisResult>(DEFAULT_ANALYSIS);
   const [features, setFeatures] = useState<GeoFeature[]>([]);
-  const [highlights, setHighlights] = useState<string[]>([
-    "Odisha",
-    "63.4% Vegetation",
-    "-18.4% reduction",
-    "37 water bodies",
-  ]);
-  const [recentQueries, setRecentQueries] = useState<RecentQuery[]>([
-    {
-      id: "1",
-      text: "Show vegetation loss between 2024 and 2026",
-      timestamp: "10:15 AM",
-      intent: "vegetation-loss",
-      location: "Odisha, India",
-    },
-    {
-      id: "2",
-      text: "Find water bodies near Chilika lake",
-      timestamp: "09:42 AM",
-      intent: "water-bodies",
-      location: "Chilika, Odisha",
-    },
-    {
-      id: "3",
-      text: "Where has construction increased in Bengaluru?",
-      timestamp: "Yesterday",
-      intent: "construction-growth",
-      location: "Bengaluru, Karnataka",
-    },
-  ]);
+  const [highlights, setHighlights] = useState<string[]>([]);
+  const [recentQueries, setRecentQueries] = useState<RecentQuery[]>([]);
   const [answer, setAnswer] = useState(
-    "Welcome to SatQuery AI. Ask me anything about environmental change, water extraction, urban expansion, NDVI indices, or live weather across India."
+    "Submit a question or upload remote-sensing imagery to begin analysis."
   );
+  const [detailedReport, setDetailedReport] = useState<AgentDetailedReport | undefined>(undefined);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,11 +106,15 @@ export const useSatQuery = () => {
         }
         setHighlights(response.highlights || []);
         setAnswer(response.assistantMessage);
+        setDetailedReport(response.detailedReport);
 
         setRecentQueries((items) => [
           response.recentQuery,
           ...items.filter((item) => item.text !== response.recentQuery.text),
         ].slice(0, 6));
+
+        // Notify App.tsx that a query succeeded — used to trigger auto-analysis
+        onQuerySuccess?.(trimmed, response.location, response.analysis);
       } catch (err) {
         console.error("Query failed:", err);
         setError("Connection issue with intelligence engine. Please retry.");
@@ -169,8 +148,11 @@ export const useSatQuery = () => {
         setFeatures(response.features);
         setHighlights(response.highlights || []);
         setAnswer(response.assistantMessage);
+        setDetailedReport(response.detailedReport);
+        return response.location;
       } catch (err) {
         console.error("Failed to select region:", err);
+        return null;
       } finally {
         setIsProcessing(false);
       }
@@ -188,20 +170,20 @@ export const useSatQuery = () => {
     }
   }, [location.lat, location.lng]);
 
-  // Initial load
-  useEffect(() => {
-    runQuery("Show satellite intelligence baseline for Odisha, India", "Odisha, India");
-  }, []);
-
   return {
     input,
     setInput,
     location,
+    setLocation,
     weather,
     analysis,
+    setAnalysis,
     features,
     highlights,
     answer,
+    setAnswer,
+    detailedReport,
+    setDetailedReport,
     recentQueries,
     isProcessing,
     error,

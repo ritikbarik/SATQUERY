@@ -25,3 +25,11 @@ BigEarthNet.txt.parquet
 Thumbs.db
 .vscode/
 .idea/
+
+# Non-project / Local Lab documents
+*.docx
+*.drawio
+*.drawio.png
+gameverseactivitydiagram.png
+images.jpg
+

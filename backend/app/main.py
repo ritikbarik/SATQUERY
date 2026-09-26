@@ -6,7 +6,11 @@ from app.routes.bigearthnet import router as bigearthnet_router
 from app.routes.geocode import router as geocode_router
 from app.routes.geojson import router as geojson_router
 from app.routes.query import router as query_router
+from app.routes.vision import router as vision_router
 from app.routes.weather import router as weather_router
+from app.routes.autosuggest import router as autosuggest_router
+from app.routes.rs_analysis import router as rs_router
+from app.routes.boundary import router as boundary_router
 
 app = FastAPI(
     title="SatQuery AI Intelligence API",
@@ -32,3 +36,9 @@ app.include_router(weather_router)
 app.include_router(analysis_router)
 app.include_router(geojson_router)
 app.include_router(bigearthnet_router)
+app.include_router(vision_router)
+app.include_router(autosuggest_router)
+app.include_router(rs_router)
+app.include_router(boundary_router)
+# Reload trigger: SatQuery AI CV v2
+

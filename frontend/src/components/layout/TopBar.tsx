@@ -1,44 +1,61 @@
-import React, { useEffect, useState } from "react";
-import { CalendarDays, ChevronDown, Clock3, Eye, EyeOff, Globe2, MapPin, Menu, Search, Settings, UserRound } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { CalendarDays, ChevronDown, Clock3, Globe2, MapPin, Search } from "lucide-react";
 import type { LocationMetadata } from "../../types/satquery";
 
 interface TopBarProps {
   location?: LocationMetadata;
   onLocationSelect?: (locName: string) => void;
   onOpenSettings?: () => void;
-  hideMap?: boolean;
-  onToggleHideMap?: () => void;
 }
 
-const POPULAR_REGIONS = [
-  "Odisha, India",
-  "Chilika Lake, Odisha",
-  "Bengaluru, Karnataka",
-  "Delhi NCR, India",
-  "Mumbai, Maharashtra",
-  "Punjab, India",
-  "Kerala, India",
-  "Western Ghats, India",
-  "Hyderabad, Telangana",
-  "Kolkata, West Bengal",
-  "Jaipur, Rajasthan",
-  "Sundarbans, West Bengal",
-  "Ladakh, India",
-  "Assam, India",
-  "Goa, India",
+const INDIAN_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman & Nicobar",
+  "Chandigarh",
+  "Dadra & Nagar Haveli",
+  "Delhi NCR",
+  "Jammu & Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
 ];
 
 export const TopBar: React.FC<TopBarProps> = ({
   location,
   onLocationSelect,
-  onOpenSettings,
-  hideMap = false,
-  onToggleHideMap,
 }) => {
   const [showLocationDropdown, setShowLocationDropdown] = useState(false);
   const [customSearch, setCustomSearch] = useState("");
   const [currentTime, setCurrentTime] = useState("");
   const [currentDate, setCurrentDate] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const updateTime = () => {
@@ -64,93 +81,94 @@ export const TopBar: React.FC<TopBarProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  const handleCustomSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customSearch.trim() && onLocationSelect) {
-      onLocationSelect(customSearch.trim());
-      setCustomSearch("");
-      setShowLocationDropdown(false);
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowLocationDropdown(false);
+      }
+    };
+    if (showLocationDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
     }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showLocationDropdown]);
+
+  const filteredStates = INDIAN_STATES.filter((st) =>
+    st.toLowerCase().includes(customSearch.toLowerCase())
+  );
+
+  const handleSelectState = (stateName: string) => {
+    onLocationSelect?.(`${stateName}, India`);
+    setShowLocationDropdown(false);
+    setCustomSearch("");
   };
 
   return (
     <header className="topbar">
       <div className="brand-cluster">
-        <button
-          className="icon-button large"
-          aria-label="Open navigation menu"
-          onClick={onOpenSettings}
-          title="Open Settings & Preferences"
-        >
-          <Menu size={22} />
-        </button>
         <div>
           <h1>
             SAT<span>QUERY AI</span>
           </h1>
-          <p>Pan-India Satellite Intelligence Engine</p>
+          <p>Agentic Remote-Sensing Intelligence</p>
         </div>
       </div>
 
-      {/* Region Selector */}
-      <div className="location-selector-wrap">
+      {/* Region Selector - Indian States & UTs */}
+      <div className="location-selector-wrap" ref={dropdownRef}>
         <button
           className="location-pill-btn"
           onClick={() => setShowLocationDropdown(!showLocationDropdown)}
-          title="Select or Search Indian Region"
+          title="Select Indian State"
         >
           <Globe2 size={16} className="cyan animate-pulse" />
           <div className="location-pill-text">
-            <small>Active Region (Pan-India)</small>
-            <strong>{location?.displayName || "India (Subcontinent)"}</strong>
+            <small>Selected State / Region</small>
+            <strong>{location?.regionName || location?.displayName || "All-India Overview"}</strong>
           </div>
           <ChevronDown size={15} />
         </button>
 
         {showLocationDropdown && (
           <div className="location-dropdown-panel">
-            <form onSubmit={handleCustomSearchSubmit} className="location-search-box">
+            <div className="location-search-box">
               <Search size={15} className="search-icon" />
               <input
                 type="text"
-                placeholder="Search any Indian city, state, or river..."
+                placeholder="Filter Indian states..."
                 value={customSearch}
                 onChange={(e) => setCustomSearch(e.target.value)}
                 autoFocus
               />
-              <button type="submit" className="go-btn">Go</button>
-            </form>
+            </div>
 
-            <div className="dropdown-label">Popular Indian Regions &amp; States</div>
+            <div className="dropdown-label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>Indian States &amp; Territories</span>
+              <small style={{ opacity: 0.7 }}>{filteredStates.length} states</small>
+            </div>
             <div className="dropdown-region-grid">
-              {POPULAR_REGIONS.map((region) => (
-                <button
-                  key={region}
-                  className={`region-chip ${location?.displayName?.includes(region.split(",")[0]) ? "active" : ""}`}
-                  onClick={() => {
-                    onLocationSelect?.(region);
-                    setShowLocationDropdown(false);
-                  }}
-                >
-                  <MapPin size={12} />
-                  <span>{region}</span>
-                </button>
-              ))}
+              {filteredStates.map((stateName) => {
+                const isActive =
+                  location?.regionName?.toLowerCase() === stateName.toLowerCase() ||
+                  location?.displayName?.toLowerCase().includes(stateName.toLowerCase());
+                return (
+                  <button
+                    key={stateName}
+                    className={`region-chip ${isActive ? "active" : ""}`}
+                    onClick={() => handleSelectState(stateName)}
+                  >
+                    <MapPin size={13} style={{ flexShrink: 0 }} />
+                    <span>{stateName}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
-
-      {/* Hide / Show Map Quick Toggle Button */}
-      <button
-        type="button"
-        className={`topbar-hide-map-btn ${hideMap ? "active-hidden" : ""}`}
-        onClick={onToggleHideMap}
-        title={hideMap ? "Show Satellite Map" : "Hide Map to focus on Data & Telemetry"}
-      >
-        {hideMap ? <Eye size={15} /> : <EyeOff size={15} />}
-        <span>{hideMap ? "Show Map" : "Hide Map"}</span>
-      </button>
 
       <div className="top-meta">
         <div>
@@ -164,23 +182,6 @@ export const TopBar: React.FC<TopBarProps> = ({
           <strong>{currentTime || "IST"}</strong>
         </div>
       </div>
-
-      {/* Operator profile button */}
-      <button
-        className="user-menu"
-        aria-label="Open settings"
-        onClick={onOpenSettings}
-        title="Open Settings & Color Theme"
-      >
-        <span className="avatar">
-          <UserRound size={18} />
-        </span>
-        <span>
-          <small>Operator</small>
-          <strong>Analyst</strong>
-        </span>
-        <Settings size={14} style={{ marginLeft: "2px", opacity: 0.7 }} />
-      </button>
     </header>
   );
 };

@@ -31,6 +31,10 @@ export interface AnalysisResult {
   evidence?: string[];
   aiWorkflow?: string;
   soilMoisture?: number;
+  calculationNotes?: string[];
+  vegetationCover?: number;
+  waterBodies?: number;
+  builtUpArea?: number;
 }
 
 export interface GeoFeature {
@@ -143,6 +147,7 @@ export interface QueryResponse {
   recentQuery: RecentQuery;
   assistantMessage: string;
   bigearthnet?: BigEarthNetPatchDetail;
+  detailedReport?: AgentDetailedReport;
 }
 
 export interface BackendQueryIntent {
@@ -169,6 +174,7 @@ export interface BackendAnalysisStats {
   evidence?: string[];
   aiWorkflow?: string;
   soilMoisture?: number;
+  calculationNotes?: string[];
 }
 
 export interface GeoJsonFeature {
@@ -206,6 +212,45 @@ export interface BackendRecentQuery {
   intent: BackendQueryIntent;
 }
 
+export interface ExecutionTrace {
+  task_classified: string;
+  selected_model: string;
+  input_modality: string;
+  compatibility_verified: boolean;
+  format_supported: string;
+  parameters_used: Record<string, unknown>;
+  confidence_score: number;
+  latency_ms: number;
+}
+
+export interface CrossModalEvidence {
+  optical_findings: string;
+  sar_findings: string;
+  fusion_synergy: string;
+  optical_sensor: string;
+  sar_sensor: string;
+  co_registration_status: string;
+}
+
+export interface BiTemporalChangeEvidence {
+  t1_timestamp: string;
+  t2_timestamp: string;
+  change_type: string;
+  increased_km2: number;
+  decreased_km2: number;
+  unchanged_km2: number;
+  change_description: string;
+}
+
+export interface AgentDetailedReport {
+  executive_summary: string;
+  detailed_analysis_markdown: string;
+  execution_trace: ExecutionTrace;
+  cross_modal_evidence: CrossModalEvidence;
+  bitemporal_change_evidence?: BiTemporalChangeEvidence;
+  benchmark_scores: Record<string, string>;
+}
+
 export interface BackendQueryResponse {
   answer: string;
   analysis: BackendAnalysisStats;
@@ -215,4 +260,157 @@ export interface BackendQueryResponse {
   highlights: string[];
   recentQueries: BackendRecentQuery[];
   bigearthnet?: BigEarthNetPatchDetail;
+  detailed_report?: AgentDetailedReport;
 }
+
+export interface DiscussionMessage {
+  speaker: string;
+  role: "analyst" | "vision_model" | "radar_specialist" | "consensus";
+  message: string;
+  timestamp: string;
+}
+
+export interface DetectedVisualFeature {
+  name: string;
+  category: string;
+  confidence: number;
+  description: string;
+}
+
+export interface SnapshotDiscussionResponse {
+  snapshot_id: string;
+  location_name: string;
+  coordinates: string;
+  zoom_level: number;
+  analysis_timestamp: string;
+  vision_summary: string;
+  detailed_discussion: DiscussionMessage[];
+  detected_features: DetectedVisualFeature[];
+  spectral_alignment: string;
+  recommendations: string[];
+}
+
+export type AnalysisMode = "single_image" | "optical_sar" | "before_after";
+
+export interface UploadedImageInfo {
+  file: File;
+  previewUrl: string;
+  filename: string;
+  format?: string;
+  width?: number;
+  height?: number;
+  bands?: number;
+  crs?: string | null;
+  bounds?: [number, number, number, number] | null;
+  thumbnail?: string | null;
+  source?: string;
+  notes?: string[];
+}
+
+export interface GroundingBoxItem {
+  id: string;
+  label: string;
+  confidence: number;
+  box_2d: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0-1000
+  description?: string;
+}
+
+export type AnnotatedFeatureType =
+  | "water"
+  | "vegetation"
+  | "built_up"
+  | "sar"
+  | "change_increase"
+  | "change_decrease"
+  | "primary";
+
+export interface AnnotatedFeature {
+  id: string;
+  type: AnnotatedFeatureType;
+  label: string;
+  confidence: number;
+  box_2d: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0-1000
+  description?: string;
+  color?: string; // hex hint from backend
+}
+
+export interface BuildingDetectionItem {
+  id: string;
+  label: string;
+  confidence: number;
+  box_pixel?: [number, number, number, number];
+  box_1000?: [number, number, number, number];
+  geo_bounds?: {
+    south: number;
+    north: number;
+    west: number;
+    east: number;
+    center: [number, number];
+    leaflet_bounds: [[number, number], [number, number]];
+  };
+  center_latlng?: [number, number];
+  area_m2?: number;
+}
+
+export interface WaterBodyPolygon {
+  id: string;
+  name: string;
+  type: string;
+  confidence: number;
+  area_m2: number;
+  area_km2: number;
+  perimeter_m?: number;
+  centroid?: [number, number];
+  geojson?: any;
+  leaflet_coordinates: [number, number][];
+  box_1000?: [number, number, number, number];
+  bounds?: [number, number, number, number];
+  ndwi_estimate?: number;
+}
+
+export interface GeographicAnalysisBoundary {
+  type: string;
+  coordinates?: any;
+  leaflet_bounds?: [[number, number], [number, number]];
+  center?: [number, number];
+  zoom?: number;
+  category?: string;
+  delta_deg?: number;
+  bounds?: [number, number, number, number];
+}
+
+export interface RemoteSensingAnalysisResult {
+  detected_task: string;
+  selected_models: string[];
+  execution_status: string;
+  confidence_score?: number | null;
+  confidence_status: string;
+  question: string;
+  answer: string;
+  analysis_mode: AnalysisMode;
+  image_1?: UploadedImageInfo | null;
+  image_2?: UploadedImageInfo | null;
+  stats?: Partial<AnalysisResult>;
+  grounding_boxes: GroundingBoxItem[];
+  annotated_features?: AnnotatedFeature[];
+  water_polygons?: WaterBodyPolygon[];
+  detected_buildings?: BuildingDetectionItem[];
+  analysis_boundary?: GeographicAnalysisBoundary | null;
+  counts_summary?: {
+    buildings?: number;
+    water_bodies?: number;
+    total_water_area_m2?: number;
+    total_water_area_km2?: number;
+  };
+  bitemporal_change?: {
+    increased_pct?: number;
+    decreased_pct?: number;
+    unchanged_pct?: number;
+    description?: string;
+    change_mask_b64?: string;
+  } | null;
+  location?: LocationMetadata;
+  detailed_report?: AgentDetailedReport;
+}
+
+

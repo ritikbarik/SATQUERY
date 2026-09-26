@@ -87,10 +87,6 @@ export const AssistantPanel: React.FC<AssistantPanelProps> = ({
           />
         </div>
       </div>
-
-      <p className="disclaimer">
-        SatQuery AI integrates Copernicus Sentinel-1 SAR &amp; Sentinel-2 telemetry, BigEarthNet Earth Observation VQA dataset, and Open-Meteo live API.
-      </p>
     </section>
   );
 };

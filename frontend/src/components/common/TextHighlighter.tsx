@@ -59,6 +59,12 @@ export const TextHighlighter: React.FC<TextHighlighterProps> = ({
   const renderHighlightedContent = () => {
     if (!text) return null;
 
+    // Sanitize raw markdown characters (** and leading -)
+    const cleanText = text
+      .replace(/\*\*/g, "")
+      .replace(/^#{1,6}\s*/gm, "")
+      .replace(/^[-•*]\s+/gm, "");
+
     // Build regex pattern from highlights and numeric patterns
     const terms = highlights
       .filter(Boolean)
@@ -71,7 +77,7 @@ export const TextHighlighter: React.FC<TextHighlighterProps> = ({
       : `([-+]?\\d+(?:\\.\\d+)?(?:%|°C|\\s*km²|\\s*km)?|\\b20\\d{2}\\b)`;
 
     const regex = new RegExp(regexPattern, "gi");
-    const parts = text.split(regex);
+    const parts = cleanText.split(regex);
 
     return parts.map((part, index) => {
       if (!part) return null;

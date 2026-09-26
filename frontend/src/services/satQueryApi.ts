@@ -1,4 +1,5 @@
 import type {
+  AgentDetailedReport,
   AnalysisMetric,
   BackendLayerCollections,
   BackendQueryIntent,
@@ -13,6 +14,8 @@ import type {
   QueryRequest,
   QueryResponse,
   RecentQuery,
+  RemoteSensingAnalysisResult,
+  SnapshotDiscussionResponse,
   WeatherData,
 } from "../types/satquery";
 
@@ -55,6 +58,56 @@ export const fetchWeatherData = async (lat: number, lng: number): Promise<Weathe
   if (!response.ok) {
     throw new SatQueryApiError(`Failed to fetch weather`);
   }
+  return response.json();
+};
+
+export const requestSnapshotDiscussion = async (params: {
+  query: string;
+  location_name: string;
+  lat: number;
+  lng: number;
+  zoom?: number;
+  image_data?: string;
+  indices?: Record<string, number>;
+  follow_up_question?: string;
+}): Promise<SnapshotDiscussionResponse> => {
+  const response = await fetch(`${API_BASE_URL}/api/snapshot/discuss`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    throw new SatQueryApiError(`Failed to fetch snapshot discussion: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const askSnapshotFollowup = async (params: {
+  query: string;
+  location_name: string;
+  lat: number;
+  lng: number;
+  zoom?: number;
+  image_data?: string;
+  indices?: Record<string, number>;
+  follow_up_question: string;
+}): Promise<SnapshotDiscussionResponse> => {
+  const response = await fetch(`${API_BASE_URL}/api/snapshot/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    throw new SatQueryApiError(`Failed to submit snapshot follow-up: ${response.status}`);
+  }
+
   return response.json();
 };
 
@@ -113,6 +166,9 @@ const adaptBackendResponse = (response: BackendQueryResponse): QueryResponse => 
       evidence: response.analysis.evidence,
       aiWorkflow: response.analysis.aiWorkflow,
       soilMoisture: response.analysis.soilMoisture,
+      vegetationCover: response.analysis.vegetationCover,
+      waterBodies: response.analysis.waterBodies,
+      builtUpArea: response.analysis.builtUpArea,
     },
     features: flattenLayers(response.layers),
     location: response.location,
@@ -121,6 +177,7 @@ const adaptBackendResponse = (response: BackendQueryResponse): QueryResponse => 
     recentQuery: toRecentQuery(response.recentQueries[0], intent, response.location?.displayName),
     assistantMessage: response.answer,
     bigearthnet: response.bigearthnet,
+    detailedReport: response.detailed_report as AgentDetailedReport | undefined,
   };
 };
 
@@ -198,3 +255,38 @@ const toRecentQuery = (
   intent,
   location,
 });
+
+export interface RemoteSensingSubmitParams {
+  question: string;
+  analysis_mode: string;
+  location: string;
+  image_1?: File | null;
+  image_2?: File | null;
+}
+
+export const submitRemoteSensingAnalysis = async (
+  params: RemoteSensingSubmitParams
+): Promise<RemoteSensingAnalysisResult> => {
+  const formData = new FormData();
+  formData.append("question", params.question);
+  formData.append("analysis_mode", params.analysis_mode);
+  formData.append("location", params.location);
+  if (params.image_1) {
+    formData.append("image_1", params.image_1);
+  }
+  if (params.image_2) {
+    formData.append("image_2", params.image_2);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/rs/analyze`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new SatQueryApiError(`Remote Sensing Analysis failed with HTTP ${response.status}`);
+  }
+
+  return response.json();
+};
+

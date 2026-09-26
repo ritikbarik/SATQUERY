@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Check, Eye, EyeOff, Globe2, Layers, Map as MapIcon, Moon, Sliders, Sun, User } from "lucide-react";
+import { Check, Eye, Globe2, Layers, Moon, Sliders, Sun } from "lucide-react";
 
 type ThemeMode = "light" | "dark" | "comfort";
 
 interface SettingsPanelProps {
-  hideMap?: boolean;
-  onToggleHideMap?: () => void;
+  onClose?: () => void;
 }
 
-export const SettingsPanel: React.FC<SettingsPanelProps> = ({ hideMap = false, onToggleHideMap }) => {
+export const SettingsPanel: React.FC<SettingsPanelProps> = () => {
   const [currentTheme, setCurrentTheme] = useState<ThemeMode>(() => {
     return (localStorage.getItem("satquery_theme") as ThemeMode) || "light";
   });
@@ -16,7 +15,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ hideMap = false, o
     return localStorage.getItem("satquery_default_region") || "Odisha, India";
   });
   const [spectralMode, setSpectralMode] = useState("NDVI (Canopy Health)");
-  const [autoRefreshTelemetry, setAutoRefreshTelemetry] = useState(true);
 
   // Apply theme to document element
   const handleThemeChange = (theme: ThemeMode) => {
@@ -39,54 +37,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ hideMap = false, o
 
       <div className="settings-body">
         {/* ===================================================================
-            1. OPERATOR PROFILE
-            =================================================================== */}
-        <div className="settings-section">
-          <div className="settings-section-label">Active Analyst Profile</div>
-          <div className="settings-profile-card">
-            <div className="settings-avatar">
-              <User size={20} />
-            </div>
-            <div className="settings-profile-info">
-              <strong>Geospatial Intelligence Analyst</strong>
-              <small>Operator Session (Local Workspace)</small>
-            </div>
-          </div>
-        </div>
-
-        {/* ===================================================================
-            2. MAP VISIBILITY (HIDE MAP OPTION)
-            =================================================================== */}
-        <div className="settings-section">
-          <div className="settings-section-label">Map Display Controls</div>
-          <div className="settings-toggle-row">
-            <div>
-              <strong>Hide Satellite Map</strong>
-              <small>{hideMap ? "Map is currently hidden (Data Focus Mode)" : "ArcGIS imagery is visible"}</small>
-            </div>
-            <button
-              type="button"
-              className={`hide-map-pill-btn ${hideMap ? "hidden-active" : ""}`}
-              onClick={onToggleHideMap}
-              title={hideMap ? "Show Satellite Map" : "Hide Satellite Map"}
-            >
-              {hideMap ? (
-                <>
-                  <EyeOff size={14} />
-                  <span>Map Hidden</span>
-                </>
-              ) : (
-                <>
-                  <MapIcon size={14} />
-                  <span>Map Shown</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* ===================================================================
-            3. THEME CUSTOMIZATION
+            1. THEME CUSTOMIZATION
             =================================================================== */}
         <div className="settings-section">
           <div className="settings-section-label">Color Theme &amp; Eye Comfort</div>
@@ -136,7 +87,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ hideMap = false, o
         </div>
 
         {/* ===================================================================
-            4. OBSERVATION & SATELLITE PREFERENCES
+            2. OBSERVATION & SATELLITE PREFERENCES
             =================================================================== */}
         <div className="settings-section">
           <div className="settings-section-label">Default Observation Region</div>
@@ -150,13 +101,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ hideMap = false, o
               }}
             >
               <option value="Odisha, India">Odisha, India (Chilika Lake)</option>
+              <option value="Maharashtra, India">Maharashtra, India (Mumbai / Pune)</option>
+              <option value="Karnataka, India">Karnataka, India (Bengaluru)</option>
               <option value="Delhi NCR, India">Delhi NCR, India</option>
-              <option value="Bengaluru, Karnataka">Bengaluru, Karnataka</option>
-              <option value="Mumbai, Maharashtra">Mumbai, Maharashtra</option>
-              <option value="Kerala, India">Kerala, India</option>
-              <option value="Punjab, India">Punjab, India</option>
-              <option value="Western Ghats, India">Western Ghats, India</option>
-              <option value="Sundarbans, West Bengal">Sundarbans, West Bengal</option>
+              <option value="West Bengal, India">West Bengal, India (Sundarbans)</option>
+              <option value="Kerala, India">Kerala, India (Vembanad Lake)</option>
+              <option value="Gujarat, India">Gujarat, India (Rann of Kutch)</option>
+              <option value="Rajasthan, India">Rajasthan, India (Thar Desert)</option>
+              <option value="Assam, India">Assam, India (Brahmaputra Valley)</option>
             </select>
           </div>
         </div>
@@ -171,25 +123,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ hideMap = false, o
               <option>NDBI (Built-Up &amp; Urban Concrete)</option>
               <option>Sentinel-1 SAR C-Band Backscatter</option>
             </select>
-          </div>
-        </div>
-
-        {/* Telemetry toggle */}
-        <div className="settings-section">
-          <div className="settings-section-label">Real-time Telemetry Sync</div>
-          <div className="settings-toggle-row">
-            <div>
-              <strong>Open-Meteo Weather Sync</strong>
-              <small>Continuous atmospheric telemetry</small>
-            </div>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={autoRefreshTelemetry}
-                onChange={() => setAutoRefreshTelemetry(!autoRefreshTelemetry)}
-              />
-              <span className="toggle-slider" />
-            </label>
           </div>
         </div>
       </div>

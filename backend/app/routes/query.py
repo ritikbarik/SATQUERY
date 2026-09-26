@@ -49,4 +49,5 @@ async def query_satellite_intelligence(request: QueryRequest) -> QueryResponse:
         highlights=all_highlights,
         recentQueries=[recent_query],
         bigearthnet=output.bigearthnet,
+        detailed_report=output.detailed_report,
     )

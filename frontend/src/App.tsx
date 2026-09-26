@@ -1,25 +1,338 @@
-import { useState } from "react";
-import { AssistantPanel } from "./components/ai/AssistantPanel";
-import { HeroQuery } from "./components/ai/HeroQuery";
+import { useCallback, useRef, useState } from "react";
+import html2canvas from "html2canvas";
+import type { Map as LeafletMap } from "leaflet";
+import { Layers, Map as MapIcon, Sparkles } from "lucide-react";
+import { AgenticResponseWorkspace } from "./components/ai/AgenticResponseWorkspace";
 import { BottomNav } from "./components/layout/BottomNav";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TopBar } from "./components/layout/TopBar";
 import { SatelliteMap } from "./components/map/SatelliteMap";
-import { AnalysisSummary } from "./components/panels/AnalysisSummary";
-import { AreaInformation } from "./components/panels/AreaInformation";
+import { BeforeAfterSwipeViewer } from "./components/map/BeforeAfterSwipeViewer";
+import { ChangeMapView } from "./components/map/ChangeMapView";
+import { ImageAnnotationViewer } from "./components/panels/ImageAnnotationViewer";
+import { InputAnalysisPanel } from "./components/panels/InputAnalysisPanel";
 import { RecentQueries } from "./components/panels/RecentQueries";
 import { SavedResults } from "./components/panels/SavedResults";
 import { SettingsPanel } from "./components/panels/SettingsPanel";
-import { WeatherCard } from "./components/panels/WeatherCard";
 import { useSatQuery } from "./hooks/useSatQuery";
-import { Compass, Eye, Radio, ShieldCheck } from "lucide-react";
+import {
+  captureBoundsSatelliteImage,
+  captureMapSnapshot,
+  capturePlaceSatelliteImage,
+  dataUrlToFile,
+} from "./services/mapSnapshot";
+import { submitRemoteSensingAnalysis } from "./services/satQueryApi";
+import type {
+  AnalysisMode,
+  LocationMetadata,
+  RemoteSensingAnalysisResult,
+  UploadedImageInfo,
+} from "./types/satquery";
 
 export type SidebarTab = "ask" | "recent" | "saved" | "settings";
 
 const App = () => {
-  const satQuery = useSatQuery();
   const [activeTab, setActiveTab] = useState<SidebarTab>("ask");
-  const [hideMap, setHideMap] = useState<boolean>(false);
+
+  // Dedicated Remote-Sensing State
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>("single_image");
+  const [image1, setImage1] = useState<UploadedImageInfo | null>(null);
+  const [image2, setImage2] = useState<UploadedImageInfo | null>(null);
+  const [question, setQuestion] = useState("");
+  const [isAnalyzingRS, setIsAnalyzingRS] = useState(false);
+  const [isCapturingMap, setIsCapturingMap] = useState(false);
+  const leafletMapRef = useRef<LeafletMap | null>(null);
+
+  // Center Viewport Mode: "map" | "before_after" | "change_map" (Section 30 of masterprompt.md)
+  const [centerViewMode, setCenterViewMode] = useState<"map" | "before_after" | "change_map">("map");
+  const [historicalYear, setHistoricalYear] = useState<number>(2021);
+  const [currentYear, setCurrentYear] = useState<number>(2026);
+  const [rsResult, setRsResult] = useState<RemoteSensingAnalysisResult | null>(null);
+  const [focusedBoxId, setFocusedBoxId] = useState<string | null>(null);
+
+  const satQuery = useSatQuery();
+
+  // Execute Real Remote-Sensing Analysis
+  const handleRunAnalysis = useCallback(
+    async (
+      customQuery?: string,
+      overrideImage1?: UploadedImageInfo | null,
+      overrideImage2?: UploadedImageInfo | null
+    ) => {
+      const activeImage1 = overrideImage1 !== undefined ? overrideImage1 : image1;
+      const activeImage2 = overrideImage2 !== undefined ? overrideImage2 : image2;
+
+      const queryText = (
+        customQuery ||
+        question ||
+        satQuery.input ||
+        "Analyze remote-sensing land cover, building structures, and water bodies in this selected satellite image."
+      ).trim();
+      setIsAnalyzingRS(true);
+
+      try {
+        const inPlaceMatch = queryText.match(/\b(?:in|at|near|for|around)\s+([A-Za-z\s]+?)(?:\?|$|\.|\,)/i);
+        const targetLocName =
+          (inPlaceMatch && inPlaceMatch[1]?.trim()) ||
+          activeImage1?.source ||
+          satQuery.location?.displayName ||
+          "India";
+
+        const result = await submitRemoteSensingAnalysis({
+          question: queryText,
+          analysis_mode: analysisMode,
+          location: targetLocName,
+          image_1: activeImage1?.file || null,
+          image_2: activeImage2?.file || null,
+        });
+
+        // Update local state with real model output & active images
+        setRsResult({
+          ...result,
+          image_1: activeImage1,
+          image_2: activeImage2,
+        });
+
+        // Synchronize satQuery state cleanly without triggering duplicate background requests
+        if (result.location) {
+          satQuery.setLocation(result.location);
+        }
+        if (result.answer) {
+          satQuery.setAnswer(result.answer);
+        }
+        if (result.stats) {
+          const statsObj = result.stats;
+          satQuery.setAnalysis((prev) => ({
+            ...prev,
+            ...statsObj,
+            metrics: statsObj.metrics || prev.metrics || [],
+            activeLayers: (statsObj.activeLayers as any) || prev.activeLayers,
+          }));
+        }
+        if (result.detailed_report) {
+          satQuery.setDetailedReport(result.detailed_report);
+        }
+
+        // Auto-highlight first found feature on map if available
+        if (result.grounding_boxes && result.grounding_boxes.length > 0) {
+          setFocusedBoxId(result.grounding_boxes[0].id);
+        }
+      } catch (err) {
+        console.error("Remote Sensing Analysis error:", err);
+      } finally {
+        setIsAnalyzingRS(false);
+      }
+    },
+    [question, satQuery, analysisMode, image1, image2]
+  );
+
+  // Feature: Search a Place, Center Map, Take Screenshot, and Add as Image
+  const handleSearchAndCapture = useCallback(
+    async (
+      placeQuery: string,
+      targetSlot: "image1" | "image2" = "image1",
+      bbox?: [number, number, number, number],
+      lat?: number,
+      lng?: number
+    ) => {
+      setIsCapturingMap(true);
+      try {
+        let snap = null;
+        let targetLoc = satQuery.location;
+
+        if (bbox && lat !== undefined && lng !== undefined) {
+          // Exact city coordinates & bounds provided from suggestion!
+          snap = await captureBoundsSatelliteImage(bbox, placeQuery, lat, lng);
+          const cityLoc: LocationMetadata = {
+            displayName: placeQuery,
+            regionName: placeQuery.split(",")[0].trim(),
+            state: placeQuery.split(",")[1]?.trim() || "India",
+            country: "India",
+            lat,
+            lng,
+            boundingBox: bbox,
+            areaKm2: 0,
+            elevationMeters: 0,
+            coordinatesDisplay: `${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E`,
+          };
+          satQuery.setLocation(cityLoc);
+          targetLoc = cityLoc;
+        } else {
+          // 1. Center map on searched place
+          const newLoc = await satQuery.selectRegion(placeQuery);
+          targetLoc = newLoc || satQuery.location;
+
+          // 2. Fetch high-res satellite screenshot
+          if (targetLoc?.boundingBox) {
+            snap = await captureBoundsSatelliteImage(
+              targetLoc.boundingBox as [number, number, number, number],
+              targetLoc.displayName,
+              targetLoc.lat,
+              targetLoc.lng
+            );
+          } else {
+            snap = await capturePlaceSatelliteImage(placeQuery);
+          }
+        }
+
+        const dataUrl = snap?.dataUrl || "";
+        if (dataUrl) {
+          const cleanName = (snap?.filename || `${placeQuery.split(",")[0]}_Satellite.png`).replace(/[^a-zA-Z0-9_.-]/g, "_");
+          const file = dataUrlToFile(dataUrl, cleanName);
+          const info: UploadedImageInfo = {
+            file,
+            previewUrl: dataUrl,
+            filename: cleanName,
+            format: snap?.format || "PNG",
+            source: `${snap?.source || "Satellite"} (${targetLoc?.displayName || placeQuery})`,
+            bounds: snap?.bounds || (targetLoc?.boundingBox ? (targetLoc.boundingBox as [number, number, number, number]) : undefined),
+          };
+
+          if (targetSlot === "image2") {
+            setImage2(info);
+          } else {
+            setImage1(info);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to search and capture map:", err);
+      } finally {
+        setIsCapturingMap(false);
+      }
+    },
+    [satQuery]
+  );
+
+  const handleResetQuery = useCallback(() => {
+    setQuestion("");
+    satQuery.setInput("");
+    setImage1(null);
+    setImage2(null);
+    setRsResult(null);
+    setFocusedBoxId(null);
+    satQuery.setAnswer("Submit a question or upload remote-sensing imagery to begin analysis.");
+  }, [satQuery]);
+
+  // Capture Current Map View directly — captures whichever part of the map is currently zoomed into
+  const handleCaptureCurrentView = useCallback(
+    async (targetSlot: "image1" | "image2" = "image1") => {
+      setIsCapturingMap(true);
+      try {
+        const targetLoc = satQuery.location;
+        const placeName = targetLoc?.displayName || "Satellite View";
+        const map = leafletMapRef.current;
+
+        let liveBounds: [number, number, number, number] | undefined;
+        let centerLat = targetLoc?.lat ?? 20.5937;
+        let centerLng = targetLoc?.lng ?? 78.9629;
+        let currentZoom = 15;
+
+        if (map) {
+          try {
+            const b = map.getBounds();
+            const south = b.getSouth();
+            const north = b.getNorth();
+            const west = b.getWest();
+            const east = b.getEast();
+            liveBounds = [south, north, west, east];
+            const center = map.getCenter();
+            centerLat = center.lat;
+            centerLng = center.lng;
+            currentZoom = map.getZoom();
+          } catch (e) {
+            console.warn("Could not get current Leaflet bounds:", e);
+          }
+        }
+
+        const effectiveBounds = liveBounds || (targetLoc?.boundingBox as [number, number, number, number] | undefined);
+
+        let dataUrl: string | null = null;
+        let captureSource = "Live Satellite View";
+
+        // 1. Direct client-side DOM html2canvas capture of the zoomed-in map element
+        try {
+          const mapEl = document.querySelector(".satellite-map") as HTMLElement;
+          if (mapEl) {
+            const canvas = await html2canvas(mapEl, {
+              useCORS: true,
+              allowTaint: false,
+              logging: false,
+              scale: 1.25,
+              ignoreElements: (el) =>
+                el.classList.contains("map-toolbar") ||
+                el.classList.contains("compass") ||
+                el.classList.contains("leaflet-control-container") ||
+                el.classList.contains("center-mode-switch-bar") ||
+                el.classList.contains("top-map-extent-strip"),
+            });
+            const domDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+            if (domDataUrl && domDataUrl.length > 3000) {
+              dataUrl = domDataUrl;
+              captureSource = `Live Map View (Zoom Level ${currentZoom})`;
+            }
+          }
+        } catch (domErr) {
+          console.warn("Direct DOM capture issue, falling back to satellite proxy:", domErr);
+        }
+
+        // 2. High-resolution satellite service for the exact bounding box if DOM capture was empty
+        if (!dataUrl && effectiveBounds) {
+          const snap = await captureBoundsSatelliteImage(
+            effectiveBounds,
+            placeName,
+            centerLat,
+            centerLng,
+            currentZoom
+          );
+          if (snap?.dataUrl) {
+            dataUrl = snap.dataUrl;
+            captureSource = snap.source || `ArcGIS Satellite (Zoom ${currentZoom})`;
+          }
+        }
+
+        // 3. Fallback snapshot
+        if (!dataUrl) {
+          dataUrl = await captureMapSnapshot(
+            "satquery-map-element",
+            targetLoc ? { displayName: targetLoc.displayName, lat: centerLat, lng: centerLng } : undefined
+          );
+        }
+
+        const cleanSlug = (targetLoc?.regionName || placeName || "Satellite_View").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const cleanName = `${cleanSlug}_Zoom${currentZoom}_Capture.jpg`;
+        const file = dataUrlToFile(dataUrl, cleanName);
+        const info: UploadedImageInfo = {
+          file,
+          previewUrl: dataUrl,
+          filename: cleanName,
+          format: "JPEG",
+          source: `${captureSource} — ${placeName}`,
+          bounds: effectiveBounds,
+        };
+
+        // Switch to 'ask' tab so the Imagery slot is immediately visible to user
+        setActiveTab("ask");
+
+        // Set prompt if empty
+        if (!question.trim()) {
+          const promptText = `Analyze land use, building structures, water bodies, and vegetation in this zoomed-in satellite area of ${placeName}.`;
+          setQuestion(promptText);
+          satQuery.setInput(promptText);
+        }
+
+        if (targetSlot === "image2") {
+          setImage2(info);
+        } else {
+          setImage1(info);
+        }
+      } catch (err) {
+        console.error("Failed to capture current map view:", err);
+      } finally {
+        setIsCapturingMap(false);
+      }
+    },
+    [satQuery.location, question, satQuery]
+  );
 
   const renderLeftPanel = () => {
     switch (activeTab) {
@@ -28,25 +341,56 @@ const App = () => {
           <RecentQueries
             queries={satQuery.recentQueries}
             onSelectQuery={(q) => {
-              satQuery.runQuery(q);
+              setQuestion(q);
+              satQuery.setInput(q);
               setActiveTab("ask");
+              handleRunAnalysis(q);
             }}
           />
         );
       case "saved":
-        return <SavedResults />;
-      case "settings":
         return (
-          <SettingsPanel
-            hideMap={hideMap}
-            onToggleHideMap={() => setHideMap(!hideMap)}
+          <SavedResults
+            onSelectQuery={(q) => {
+              setQuestion(q);
+              satQuery.setInput(q);
+              setActiveTab("ask");
+              handleRunAnalysis(q);
+            }}
           />
         );
+      case "settings":
+        return <SettingsPanel onClose={() => setActiveTab("ask")} />;
       default:
         return (
-          <AreaInformation
+          <InputAnalysisPanel
+            mode={analysisMode}
+            onModeChange={(newMode) => {
+              setAnalysisMode(newMode);
+              if (newMode === "before_after") {
+                setCenterViewMode("before_after");
+              }
+            }}
+            image1={image1}
+            image2={image2}
+            onImage1Change={setImage1}
+            onImage2Change={setImage2}
+            historicalYear={historicalYear}
+            currentYear={currentYear}
+            onHistoricalYearChange={setHistoricalYear}
+            onCurrentYearChange={setCurrentYear}
             location={satQuery.location}
-            analysis={satQuery.analysis}
+            onSearchAndCapture={handleSearchAndCapture}
+            onCaptureCurrentView={handleCaptureCurrentView}
+            isCapturingSnapshot={isCapturingMap}
+            question={question}
+            onQuestionChange={(q) => {
+              setQuestion(q);
+              satQuery.setInput(q);
+            }}
+            onAnalyze={() => handleRunAnalysis()}
+            onResetQuery={handleResetQuery}
+            isProcessing={isAnalyzingRS || satQuery.isProcessing}
           />
         );
     }
@@ -54,178 +398,133 @@ const App = () => {
 
   return (
     <main className="app-shell">
+      {/* Top Header with Live Clock, Date Widget & Settings */}
       <TopBar
         location={satQuery.location}
         onLocationSelect={satQuery.selectRegion}
         onOpenSettings={() => setActiveTab("settings")}
-        hideMap={hideMap}
-        onToggleHideMap={() => setHideMap(!hideMap)}
       />
 
-      <div className="dashboard-grid">
-        {/* Left sidebar nav */}
+      <div className="dashboard-grid rs-grid-layout">
+        {/* Left sidebar nav icons */}
         <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* Left content panel */}
-        <aside className="left-stack">
+        {/* Left Stack: INPUT & ANALYSIS */}
+        <aside className="left-stack rs-left-stack">
           {renderLeftPanel()}
         </aside>
 
-        {/* Central viewport with Highlighted Middle Hero Query */}
-        <div className={`center-viewport-wrapper ${hideMap ? "map-hidden-mode" : ""}`}>
-          {/* Main Hero Query centered right in the middle */}
-          <HeroQuery
-            value={satQuery.input}
-            onChange={satQuery.setInput}
-            onSubmit={(customQ) => satQuery.runQuery(customQ || satQuery.input)}
-            isProcessing={satQuery.isProcessing}
-            suggestions={satQuery.suggestedQueries}
-            onSelectSuggestion={satQuery.selectSuggestion}
-          />
+        {/* Center: MAPPLS / BEFORE & AFTER SWIPE / CHANGE MAP (Sections 30 & 31 of masterprompt.md) */}
+        <div className="center-viewport-wrapper">
+          {/* Viewport Mode Switcher */}
+          <div className="center-viewport-mode-strip">
+            <div className="center-mode-buttons">
+              <button
+                type="button"
+                className={`center-mode-tab-btn ${centerViewMode === "map" ? "active" : ""}`}
+                onClick={() => setCenterViewMode("map")}
+                title="Standard Interactive Satellite Map"
+              >
+                <MapIcon size={13} />
+                <span>Map</span>
+              </button>
+              <button
+                type="button"
+                className={`center-mode-tab-btn ${centerViewMode === "before_after" ? "active" : ""}`}
+                onClick={() => setCenterViewMode("before_after")}
+                title="Bi-Temporal Before & After Swipe Comparison"
+              >
+                <Sparkles size={13} />
+                <span>Before / After</span>
+              </button>
+              <button
+                type="button"
+                className={`center-mode-tab-btn ${centerViewMode === "change_map" ? "active" : ""}`}
+                onClick={() => setCenterViewMode("change_map")}
+                title="Thematic Change Detection & Spectral Indices Overlay"
+              >
+                <Layers size={13} />
+                <span>Change Map</span>
+              </button>
+            </div>
 
-          {!hideMap ? (
+            <div className="center-mode-context-pill">
+              <span>Timeframe:</span>
+              <strong>{historicalYear} → {currentYear}</strong>
+            </div>
+          </div>
+
+          {/* Conditional Center Viewports */}
+          {centerViewMode === "before_after" ? (
+            <BeforeAfterSwipeViewer
+              image1={image1}
+              image2={image2}
+              historicalYear={historicalYear}
+              currentYear={currentYear}
+              location={satQuery.location}
+              onCaptureSlot={handleCaptureCurrentView}
+              isCapturing={isCapturingMap}
+            />
+          ) : centerViewMode === "change_map" ? (
+            <ChangeMapView
+              location={satQuery.location}
+              rsResult={rsResult}
+              image1={image1}
+              image2={image2}
+              historicalYear={historicalYear}
+              currentYear={currentYear}
+            />
+          ) : (
             <SatelliteMap
               location={satQuery.location}
               activeLayerSet={satQuery.activeLayerSet}
               features={satQuery.features}
-              isProcessing={satQuery.isProcessing}
-              onHideMap={() => setHideMap(true)}
+              isProcessing={isAnalyzingRS || satQuery.isProcessing}
+              imageBounds={rsResult?.image_1?.bounds || (image1?.bounds as any) || null}
+              imagePreviewUrl={image1?.previewUrl || rsResult?.image_1?.thumbnail || null}
+              groundingBoxes={rsResult?.grounding_boxes}
+              waterPolygons={rsResult?.water_polygons}
+              detectedBuildings={rsResult?.detected_buildings}
+              analysisBoundary={rsResult?.analysis_boundary}
+              focusedBoxId={focusedBoxId}
+              onMapReady={(map) => {
+                leafletMapRef.current = map;
+              }}
             />
-          ) : (
-            /* Dedicated Data Focus Mode when Map is Hidden */
-            <div className="data-focus-console">
-              <div className="data-focus-header">
-                <div className="data-focus-region">
-                  <div className="data-focus-badge">
-                    <Radio size={14} className="pulse-radio" />
-                    <span>Telemetry Data Focus Mode</span>
-                  </div>
-                  <h2>{satQuery.location?.displayName || "India (Subcontinent)"}</h2>
-                  <p>
-                    <Compass size={13} />
-                    <span>{satQuery.location?.coordinatesDisplay || "20.2961° N, 85.8245° E"}</span>
-                    &bull;
-                    <span>Area: {satQuery.location?.areaKm2 ? Number(satQuery.location.areaKm2).toLocaleString() + " km²" : "Active Bounding Box"}</span>
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  className="restore-map-btn"
-                  onClick={() => setHideMap(false)}
-                >
-                  <Eye size={16} />
-                  <span>Show Satellite Map</span>
-                </button>
-              </div>
-
-              {/* Spectral Telemetry Cards Grid */}
-              <div className="data-focus-grid">
-                <div className="data-telemetry-card">
-                  <div className="card-top">
-                    <span className="telemetry-label">🌿 NDVI Canopy Health</span>
-                    <span className="telemetry-val green">{satQuery.analysis.meanNdvi?.toFixed(3) ?? "0.612"}</span>
-                  </div>
-                  <div className="telemetry-progress-track">
-                    <div
-                      className="telemetry-progress-fill green"
-                      style={{ width: `${Math.min(100, Math.max(0, ((satQuery.analysis.meanNdvi ?? 0.6) + 0.2) * 100))}%` }}
-                    />
-                  </div>
-                  <small>Healthy vegetation canopy index (Sentinel-2 B8/B4)</small>
-                </div>
-
-                <div className="data-telemetry-card">
-                  <div className="card-top">
-                    <span className="telemetry-label">💧 NDWI Water Extraction</span>
-                    <span className="telemetry-val blue">{satQuery.analysis.ndwi?.toFixed(3) ?? "0.284"}</span>
-                  </div>
-                  <div className="telemetry-progress-track">
-                    <div
-                      className="telemetry-progress-fill blue"
-                      style={{ width: `${Math.min(100, Math.max(0, ((satQuery.analysis.ndwi ?? 0.3) + 0.3) * 80))}%` }}
-                    />
-                  </div>
-                  <small>Normalized Difference Water Index &amp; moisture</small>
-                </div>
-
-                <div className="data-telemetry-card">
-                  <div className="card-top">
-                    <span className="telemetry-label">🏗️ NDBI Built-Up Index</span>
-                    <span className="telemetry-val purple">{satQuery.analysis.ndbi?.toFixed(3) ?? "0.128"}</span>
-                  </div>
-                  <div className="telemetry-progress-track">
-                    <div
-                      className="telemetry-progress-fill purple"
-                      style={{ width: `${Math.min(100, Math.max(0, ((satQuery.analysis.ndbi ?? 0.12) + 0.3) * 70))}%` }}
-                    />
-                  </div>
-                  <small>Urban concrete &amp; structural impervious density</small>
-                </div>
-
-                <div className="data-telemetry-card">
-                  <div className="card-top">
-                    <span className="telemetry-label">🛰️ Sentinel-1 SAR Telemetry</span>
-                    <span className="telemetry-val amber">{satQuery.analysis.opticalSarConfidence ? `${satQuery.analysis.opticalSarConfidence}%` : "0.74"}</span>
-                  </div>
-                  <div className="telemetry-progress-track">
-                    <div
-                      className="telemetry-progress-fill amber"
-                      style={{ width: `${satQuery.analysis.opticalSarConfidence ?? 74}%` }}
-                    />
-                  </div>
-                  <small>C-band radar backscatter coherence &amp; fusion</small>
-                </div>
-              </div>
-
-              {/* Detected Land Cover Metrics breakdown */}
-              <div className="data-focus-metrics-row">
-                {satQuery.analysis.metrics.map((m) => (
-                  <div key={m.label} className={`data-metric-pill ${m.tone}`}>
-                    <span className="metric-tag">{m.label}</span>
-                    <strong className="metric-num">{m.value}</strong>
-                  </div>
-                ))}
-              </div>
-
-              <div className="data-focus-footer">
-                <div className="data-source-pill">
-                  <ShieldCheck size={14} className="green" />
-                  <span>ArcGIS World Imagery &bull; Copernicus Sentinel-1/2 &bull; BigEarthNet EO</span>
-                </div>
-                <span className="confidence-tag">
-                  Analysis Confidence: <strong>{satQuery.analysis.confidence}%</strong>
-                </span>
-              </div>
-            </div>
           )}
         </div>
 
-        {/* Right panel stack */}
-        <aside className="right-stack">
-          <WeatherCard
-            weather={satQuery.weather}
-            onRefresh={satQuery.refreshWeather}
-            isProcessing={satQuery.isProcessing}
-          />
-          <AnalysisSummary
-            analysis={satQuery.analysis}
-            isProcessing={satQuery.isProcessing}
+        {/* Right Stack: IMAGE ANNOTATION VIEWER */}
+        <aside className="right-stack rs-right-stack">
+          <ImageAnnotationViewer
+            rsResult={rsResult}
+            image1={image1}
+            image2={image2}
+            location={satQuery.location}
+            isProcessing={isAnalyzingRS || satQuery.isProcessing}
+            onRequestCapture={() => handleCaptureCurrentView("image1")}
           />
         </aside>
 
-        {/* Bottom assistant panel */}
-        <AssistantPanel
-          input={satQuery.input}
-          setInput={satQuery.setInput}
-          suggestions={satQuery.suggestedQueries}
-          isProcessing={satQuery.isProcessing}
-          error={satQuery.error}
-          answer={satQuery.answer}
-          highlights={satQuery.highlights}
+        {/* Bottom Panel: AUDITABLE EXECUTION TRACE & REPORT */}
+        <AgenticResponseWorkspace
+          answer={rsResult?.answer || satQuery.answer}
+          detailedReport={rsResult?.detailed_report || satQuery.detailedReport}
+          analysis={satQuery.analysis}
           location={satQuery.location}
-          onSelectSuggestion={satQuery.selectSuggestion}
-          onSubmit={(customQ) => satQuery.runQuery(customQ || satQuery.input)}
+          highlights={satQuery.highlights}
+          suggestions={satQuery.suggestedQueries}
+          isProcessing={isAnalyzingRS || satQuery.isProcessing}
+          error={satQuery.error}
+          onSelectSuggestion={(q) => {
+            setQuestion(q);
+            setAnalysisMode("single_image");
+            handleRunAnalysis(q);
+          }}
+          onSubmit={(customQ) => {
+            if (customQ) setQuestion(customQ);
+            handleRunAnalysis(customQ);
+          }}
         />
       </div>
 

@@ -1,5 +1,11 @@
-import React from "react";
-import { Mic, Search, SendHorizontal, Sparkles } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Mic, Search, SendHorizontal, Sparkles, X } from "lucide-react";
+
+interface MapplsSuggestion {
+  placeName: string;
+  placeAddress: string;
+  type?: string;
+}
 
 interface HeroQueryProps {
   value: string;
@@ -10,41 +16,94 @@ interface HeroQueryProps {
   onSelectSuggestion?: (query: string) => void;
 }
 
-const DEFAULT_QUICK_TAGS = [
-  { label: "💧 Water Bodies", query: "Find water bodies near Chilika lake" },
-  { label: "🌿 Vegetation Loss", query: "Show vegetation loss between 2024 and 2026" },
-  { label: "🏗️ Urban Growth", query: "Where has construction increased in Bengaluru?" },
-  { label: "📊 NDVI Canopy", query: "Compute NDVI canopy health for Odisha, India" },
-  { label: "🛰️ BigEarthNet VQA", query: "What is the dominant land cover in Austria patch?" },
-];
-
 export const HeroQuery: React.FC<HeroQueryProps> = ({
   value,
   onChange,
   onSubmit,
   isProcessing,
-  suggestions = [],
   onSelectSuggestion,
 }) => {
-  const handleTagClick = (q: string) => {
-    if (onSelectSuggestion) {
-      onSelectSuggestion(q);
-    } else {
-      onChange(q);
-      onSubmit(q);
+  const [autoSuggestions, setAutoSuggestions] = useState<MapplsSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // ----- Mappls Autosuggest via backend proxy (handles CORS + auth) -----
+  const fetchSuggestions = async (query: string) => {
+    if (query.trim().length < 2) {
+      setAutoSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      // Use the backend geocode proxy which calls Nominatim with correct auth
+      const resp = await fetch(
+        `/api/autosuggest?q=${encodeURIComponent(query)}&limit=6`
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const results: MapplsSuggestion[] = (data.suggestions || []).map(
+          (s: any) => ({
+            placeName: s.placeName || s.name || query,
+            placeAddress: s.placeAddress || s.address || "",
+          })
+        );
+        setAutoSuggestions(results);
+        setShowSuggestions(results.length > 0);
+      }
+    } catch {
+      setAutoSuggestions([]);
+      setShowSuggestions(false);
     }
   };
 
+  // Debounce input
+  const handleChange = (val: string) => {
+    onChange(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(val), 320);
+  };
+
+  const handleSuggestionSelect = (s: MapplsSuggestion) => {
+    const query = `Analyze satellite imagery and land cover for ${s.placeName}${s.placeAddress ? `, ${s.placeAddress.split(",")[0]}` : ""}`;
+    setShowSuggestions(false);
+    if (onSelectSuggestion) {
+      onSelectSuggestion(query);
+    } else {
+      onChange(query);
+      onSubmit(query);
+    }
+  };
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   return (
-    <div className="hero-query-container">
+    <div className="hero-query-container" ref={wrapperRef}>
       <div className="hero-query-wrapper">
         <div className="hero-query-glow" />
-        
+
         {/* Main interactive search box */}
         <form
           className="hero-query"
           onSubmit={(e) => {
             e.preventDefault();
+            setShowSuggestions(false);
             if (value.trim()) onSubmit(value);
           }}
         >
@@ -54,13 +113,33 @@ export const HeroQuery: React.FC<HeroQueryProps> = ({
 
           <input
             value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Ask SatQuery AI anything about Earth Observation, satellite indices, or Indian geography..."
-            aria-label="Ask SatQuery AI"
+            onChange={(e) => handleChange(e.target.value)}
+            onFocus={() => {
+              if (autoSuggestions.length > 0) setShowSuggestions(true);
+            }}
+            placeholder="Search any place in India — e.g. Guwahati, Wayanad, Chilika, Bhopal, Surat..."
+            aria-label="Search places across India"
             disabled={isProcessing}
+            autoComplete="off"
           />
 
           <div className="hero-query-actions">
+            {value && (
+              <button
+                type="button"
+                className="hero-mic-btn"
+                aria-label="Clear input"
+                title="Clear"
+                onClick={() => {
+                  onChange("");
+                  setAutoSuggestions([]);
+                  setShowSuggestions(false);
+                }}
+              >
+                <X size={15} />
+              </button>
+            )}
+
             <button
               type="button"
               className="hero-mic-btn"
@@ -78,8 +157,6 @@ export const HeroQuery: React.FC<HeroQueryProps> = ({
                     onSubmit(transcript);
                   };
                   rec.start();
-                } else {
-                  onChange("Show vegetation loss in Odisha between 2024 and 2026");
                 }
               }}
             >
@@ -98,36 +175,28 @@ export const HeroQuery: React.FC<HeroQueryProps> = ({
           </div>
         </form>
 
-        {/* Quick-action interactive suggestion chips right in the middle */}
-        <div className="hero-query-chips">
-          <span className="hero-chips-label">
-            <Search size={12} />
-            <span>Popular:</span>
-          </span>
-          {suggestions.length > 0
-            ? suggestions.slice(0, 4).map((s) => (
-                <button
-                  key={s.text}
-                  type="button"
-                  className="hero-chip-pill"
-                  onClick={() => handleTagClick(s.text)}
-                  disabled={isProcessing}
-                >
-                  {s.text.length > 28 ? s.text.slice(0, 26) + "..." : s.text}
-                </button>
-              ))
-            : DEFAULT_QUICK_TAGS.map((tag) => (
-                <button
-                  key={tag.label}
-                  type="button"
-                  className="hero-chip-pill"
-                  onClick={() => handleTagClick(tag.query)}
-                  disabled={isProcessing}
-                >
-                  {tag.label}
-                </button>
-              ))}
-        </div>
+        {/* Mappls / Nominatim autosuggest dropdown */}
+        {showSuggestions && autoSuggestions.length > 0 && (
+          <div className="hero-autosuggest-dropdown">
+            <div className="hero-autosuggest-header">
+              <Search size={11} />
+              <span>Places in India</span>
+            </div>
+            {autoSuggestions.map((s, i) => (
+              <button
+                key={i}
+                type="button"
+                className="hero-autosuggest-item"
+                onClick={() => handleSuggestionSelect(s)}
+              >
+                <div className="hero-autosuggest-name">📍 {s.placeName}</div>
+                {s.placeAddress && (
+                  <div className="hero-autosuggest-address">{s.placeAddress}</div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

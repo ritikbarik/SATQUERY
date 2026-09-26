@@ -9,8 +9,7 @@ export const isSupabaseConfigured = Boolean(
   envKey && 
   envUrl !== "your-supabase-url" && 
   !envUrl.includes("placeholder")
-);
-
+); 
 const supabaseUrl = isSupabaseConfigured ? envUrl : "https://placeholder-project.supabase.co";
 const supabaseAnonKey = isSupabaseConfigured ? envKey : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key";
 
