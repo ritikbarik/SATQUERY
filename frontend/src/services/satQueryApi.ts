@@ -18,8 +18,9 @@ import type {
   SnapshotDiscussionResponse,
   WeatherData,
 } from "../types/satquery";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? "https://satquery-backend-9uys.onrender.com" : "");
 
 export class SatQueryApiError extends Error {
   constructor(message: string) {
