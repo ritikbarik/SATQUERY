@@ -2,7 +2,11 @@ import math
 import os
 import re
 from typing import Any
-import duckdb
+
+try:
+    import duckdb
+except ImportError:
+    duckdb = None
 
 from app.models.schemas import (
     BigEarthNetPatchDetail,
@@ -88,7 +92,14 @@ def bbox_to_geojson_polygon(
 class BigEarthNetService:
     def __init__(self, parquet_path: str = PARQUET_FILE) -> None:
         self.parquet_path = parquet_path.replace("\\", "/")
-        self.con = duckdb.connect()
+        if duckdb is not None:
+            try:
+                self.con = duckdb.connect()
+            except Exception as e:
+                print(f"[BigEarthNetService] duckdb connect error: {e}")
+                self.con = None
+        else:
+            self.con = None
         self._stats_cache: BigEarthNetStats | None = None
         self._sample_patches_cache: list[BigEarthNetPatchSummary] = []
         self._init_curated_cache()
