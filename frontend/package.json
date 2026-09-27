@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.109.0",
     "@vitejs/plugin-react": "^4.3.4",
     "html2canvas": "^1.4.1",
     "leaflet": "^1.9.4",
