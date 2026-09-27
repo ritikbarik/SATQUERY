@@ -368,25 +368,6 @@ export const SatelliteMap = ({
           </>
         )}
 
-        {/* GEOGRAPHIC ANALYSIS BOUNDARY */}
-        {analysisBoundary?.leaflet_bounds && (
-          <Rectangle
-            bounds={analysisBoundary.leaflet_bounds}
-            pathOptions={{
-              color: "#10B981",
-              weight: 2,
-              fillColor: "#10B981",
-              fillOpacity: 0.04,
-              dashArray: "6, 6",
-            }}
-          >
-            <Tooltip direction="bottom" permanent className="analysis-boundary-tooltip">
-              <div style={{ fontSize: "11px", fontWeight: 700, color: "#059669", background: "rgba(255,255,255,0.9)", padding: "2px 6px", borderRadius: "4px" }}>
-                🎯 Geographic Analysis Boundary (Zoom {analysisBoundary.zoom || 16})
-              </div>
-            </Tooltip>
-          </Rectangle>
-        )}
 
         {/* GENUINE WATER BODY POLYGONS (GEOJSON / LEAFLET) */}
         {waterPolygons && waterPolygons.length > 0 && waterPolygons.map((w, idx) => (

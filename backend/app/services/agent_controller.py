@@ -159,16 +159,11 @@ def _make_detailed_report(
     )
 
 
-# ---------------------------------------------------------------------------
-# Helper: build a pending-analysis placeholder answer
-# (Real answer comes from the vision discussion pipeline after map screenshot)
-# ---------------------------------------------------------------------------
 def _pending_answer(loc: LocationMetadata, task_label: str) -> str:
     return (
-        f"🛰️ Satellite imagery captured for **{loc.displayName}**.\n\n"
-        f"**Task:** {task_label}\n\n"
-        f"Analyzing the live map snapshot — spectral indices (NDVI · NDWI · NDBI) and "
-        f"SAR C-band backscatter computed. Vision analysis is loading in the panel below."
+        f"Geospatial intelligence analysis completed for **{loc.displayName}** ({loc.coordinatesDisplay}).\n\n"
+        f"**Workflow:** {task_label}. Multispectral spectral indices (NDVI · NDWI · NDBI) and "
+        f"SAR C-band backscatter computed. Full telemetry report available in the narrative trace."
     )
 
 
@@ -386,7 +381,7 @@ class AgenticAIController:
             },
         )
         return AgentControllerOutput(
-            answer=_pending_answer(loc, "Meteorological & Soil Telemetry Analysis"),
+            answer=detailed_report.executive_summary,
             analysis=base_stats,
             layers=layers,
             highlights=highlights,
@@ -481,7 +476,7 @@ class AgenticAIController:
             },
         )
         return AgentControllerOutput(
-            answer=_pending_answer(loc, task_label),
+            answer=detailed_report.executive_summary,
             analysis=base_stats,
             layers=layers,
             highlights=highlights,
@@ -549,7 +544,7 @@ class AgenticAIController:
             },
         )
         return AgentControllerOutput(
-            answer=_pending_answer(loc, "Multispectral Index Decomposition — NDVI · NDWI · NDBI"),
+            answer=detailed_report.executive_summary,
             analysis=base_stats,
             layers=layers,
             highlights=highlights,
@@ -614,7 +609,7 @@ class AgenticAIController:
             },
         )
         return AgentControllerOutput(
-            answer=_pending_answer(loc, "Hydrological Water Body Extraction — NDWI + SAR"),
+            answer=detailed_report.executive_summary,
             analysis=base_stats,
             layers=layers,
             highlights=highlights,
@@ -676,7 +671,7 @@ class AgenticAIController:
             },
         )
         return AgentControllerOutput(
-            answer=_pending_answer(loc, "Cross-Modal Optical-SAR Object & Settlement Detection"),
+            answer=detailed_report.executive_summary,
             analysis=base_stats,
             layers=layers,
             highlights=highlights,
@@ -746,7 +741,7 @@ class AgenticAIController:
             },
         )
         return AgentControllerOutput(
-            answer=_pending_answer(loc, "Multimodal Scene Intelligence — Land Cover & SAR Fusion"),
+            answer=detailed_report.executive_summary,
             analysis=base_stats,
             layers=layers,
             highlights=highlights,

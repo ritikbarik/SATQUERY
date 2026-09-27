@@ -51,6 +51,111 @@ const App = () => {
 
   const satQuery = useSatQuery();
 
+  // Core capture routine that extracts current map raster, optimizes it, and returns UploadedImageInfo
+  const captureMapSnapshotItem = useCallback(async (): Promise<UploadedImageInfo | null> => {
+    try {
+      const targetLoc = satQuery.location;
+      const placeName = targetLoc?.displayName || "Satellite View";
+      const map = leafletMapRef.current;
+
+      let liveBounds: [number, number, number, number] | undefined;
+      let centerLat = targetLoc?.lat ?? 20.5937;
+      let centerLng = targetLoc?.lng ?? 78.9629;
+      let currentZoom = 15;
+
+      if (map) {
+        try {
+          const b = map.getBounds();
+          liveBounds = [b.getSouth(), b.getNorth(), b.getWest(), b.getEast()];
+          const center = map.getCenter();
+          centerLat = center.lat;
+          centerLng = center.lng;
+          currentZoom = map.getZoom();
+        } catch (e) {
+          console.warn("Could not get current Leaflet bounds:", e);
+        }
+      }
+
+      const effectiveBounds = liveBounds || (targetLoc?.boundingBox as [number, number, number, number] | undefined);
+      let dataUrl: string | null = null;
+      let captureSource = "Live Satellite View";
+
+      // 1. Direct client-side DOM html2canvas capture of the zoomed-in map element
+      try {
+        const mapEl = document.querySelector(".satellite-map") as HTMLElement;
+        if (mapEl) {
+          const canvas = await html2canvas(mapEl, {
+            useCORS: true,
+            allowTaint: false,
+            logging: false,
+            scale: 1.25,
+            ignoreElements: (el) =>
+              el.classList.contains("map-toolbar") ||
+              el.classList.contains("compass") ||
+              el.classList.contains("leaflet-control-container") ||
+              el.classList.contains("center-mode-switch-bar") ||
+              el.classList.contains("top-map-extent-strip"),
+          });
+          const domDataUrl = canvas.toDataURL("image/jpeg", 0.9);
+          if (domDataUrl && domDataUrl.length > 3000) {
+            dataUrl = domDataUrl;
+            captureSource = `Live Map View (Zoom Level ${currentZoom})`;
+          }
+        }
+      } catch (domErr) {
+        console.warn("Direct DOM capture issue, falling back to satellite proxy:", domErr);
+      }
+
+      // 2. High-resolution satellite service for the exact bounding box if DOM capture was empty
+      if (!dataUrl && effectiveBounds) {
+        const snap = await captureBoundsSatelliteImage(
+          effectiveBounds,
+          placeName,
+          centerLat,
+          centerLng,
+          currentZoom
+        );
+        if (snap?.dataUrl) {
+          dataUrl = snap.dataUrl;
+          captureSource = snap.source || `ArcGIS Satellite (Zoom ${currentZoom})`;
+        }
+      }
+
+      // 3. Fallback snapshot
+      if (!dataUrl) {
+        dataUrl = await captureMapSnapshot(
+          "satquery-map-element",
+          targetLoc ? { displayName: targetLoc.displayName, lat: centerLat, lng: centerLng } : undefined
+        );
+      }
+
+      const cleanSlug = (targetLoc?.regionName || placeName || "Satellite_View").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const cleanName = `${cleanSlug}_Zoom${currentZoom}_Capture.jpg`;
+      let file = dataUrlToFile(dataUrl, cleanName);
+      let previewUrl = dataUrl;
+
+      try {
+        const opt = await optimizeImage(file, cleanName);
+        file = opt.file;
+        previewUrl = opt.previewUrl;
+      } catch (optErr) {
+        console.warn("Client image optimization fallback:", optErr);
+      }
+
+      return {
+        file,
+        previewUrl,
+        filename: cleanName,
+        format: "JPEG",
+        source: `${captureSource} — ${placeName}`,
+        bounds: effectiveBounds,
+      };
+    } catch (err) {
+      console.error("Failed to capture map view:", err);
+      return null;
+    }
+  }, [satQuery.location]);
+
   // Execute Real Remote-Sensing Analysis
   const handleRunAnalysis = useCallback(
     async (
@@ -58,8 +163,18 @@ const App = () => {
       overrideImage1?: UploadedImageInfo | null,
       overrideImage2?: UploadedImageInfo | null
     ) => {
-      const activeImage1 = overrideImage1 !== undefined ? overrideImage1 : image1;
+      let activeImage1 = overrideImage1 !== undefined ? overrideImage1 : image1;
       const activeImage2 = overrideImage2 !== undefined ? overrideImage2 : image2;
+
+      // Auto-capture current map view if no image is uploaded/selected
+      if (!activeImage1 && analysisMode !== "optical_sar") {
+        setIsCapturingMap(true);
+        activeImage1 = await captureMapSnapshotItem();
+        if (activeImage1) {
+          setImage1(activeImage1);
+        }
+        setIsCapturingMap(false);
+      }
 
       const queryText = (
         customQuery ||
@@ -77,6 +192,9 @@ const App = () => {
           satQuery.location?.displayName ||
           "India";
 
+        // Concurrently dispatch query to agent controller for comprehensive synthesis
+        satQuery.runQuery(queryText, targetLocName).catch(() => {});
+
         const result = await submitRemoteSensingAnalysis({
           question: queryText,
           analysis_mode: analysisMode,
@@ -92,7 +210,7 @@ const App = () => {
           image_2: activeImage2,
         });
 
-        // Synchronize satQuery state cleanly without triggering duplicate background requests
+        // Synchronize satQuery state cleanly
         if (result.location) {
           satQuery.setLocation(result.location);
         }
@@ -122,7 +240,7 @@ const App = () => {
         setIsAnalyzingRS(false);
       }
     },
-    [question, satQuery, analysisMode, image1, image2]
+    [question, satQuery, analysisMode, image1, image2, captureMapSnapshotItem]
   );
 
   // Feature: Search a Place, Center Map, Take Screenshot, and Add as Image
@@ -217,130 +335,26 @@ const App = () => {
     async (targetSlot: "image1" | "image2" = "image1") => {
       setIsCapturingMap(true);
       try {
-        const targetLoc = satQuery.location;
-        const placeName = targetLoc?.displayName || "Satellite View";
-        const map = leafletMapRef.current;
-
-        let liveBounds: [number, number, number, number] | undefined;
-        let centerLat = targetLoc?.lat ?? 20.5937;
-        let centerLng = targetLoc?.lng ?? 78.9629;
-        let currentZoom = 15;
-
-        if (map) {
-          try {
-            const b = map.getBounds();
-            const south = b.getSouth();
-            const north = b.getNorth();
-            const west = b.getWest();
-            const east = b.getEast();
-            liveBounds = [south, north, west, east];
-            const center = map.getCenter();
-            centerLat = center.lat;
-            centerLng = center.lng;
-            currentZoom = map.getZoom();
-          } catch (e) {
-            console.warn("Could not get current Leaflet bounds:", e);
+        const info = await captureMapSnapshotItem();
+        if (info) {
+          setActiveTab("ask");
+          if (!question.trim()) {
+            const placeName = satQuery.location?.displayName || "this area";
+            const promptText = `Analyze land use, building structures, water bodies, and vegetation in this zoomed-in satellite area of ${placeName}.`;
+            setQuestion(promptText);
+            satQuery.setInput(promptText);
+          }
+          if (targetSlot === "image2") {
+            setImage2(info);
+          } else {
+            setImage1(info);
           }
         }
-
-        const effectiveBounds = liveBounds || (targetLoc?.boundingBox as [number, number, number, number] | undefined);
-
-        let dataUrl: string | null = null;
-        let captureSource = "Live Satellite View";
-
-        // 1. Direct client-side DOM html2canvas capture of the zoomed-in map element
-        try {
-          const mapEl = document.querySelector(".satellite-map") as HTMLElement;
-          if (mapEl) {
-            const canvas = await html2canvas(mapEl, {
-              useCORS: true,
-              allowTaint: false,
-              logging: false,
-              scale: 1.25,
-              ignoreElements: (el) =>
-                el.classList.contains("map-toolbar") ||
-                el.classList.contains("compass") ||
-                el.classList.contains("leaflet-control-container") ||
-                el.classList.contains("center-mode-switch-bar") ||
-                el.classList.contains("top-map-extent-strip"),
-            });
-            const domDataUrl = canvas.toDataURL("image/jpeg", 0.9);
-            if (domDataUrl && domDataUrl.length > 3000) {
-              dataUrl = domDataUrl;
-              captureSource = `Live Map View (Zoom Level ${currentZoom})`;
-            }
-          }
-        } catch (domErr) {
-          console.warn("Direct DOM capture issue, falling back to satellite proxy:", domErr);
-        }
-
-        // 2. High-resolution satellite service for the exact bounding box if DOM capture was empty
-        if (!dataUrl && effectiveBounds) {
-          const snap = await captureBoundsSatelliteImage(
-            effectiveBounds,
-            placeName,
-            centerLat,
-            centerLng,
-            currentZoom
-          );
-          if (snap?.dataUrl) {
-            dataUrl = snap.dataUrl;
-            captureSource = snap.source || `ArcGIS Satellite (Zoom ${currentZoom})`;
-          }
-        }
-
-        // 3. Fallback snapshot
-        if (!dataUrl) {
-          dataUrl = await captureMapSnapshot(
-            "satquery-map-element",
-            targetLoc ? { displayName: targetLoc.displayName, lat: centerLat, lng: centerLng } : undefined
-          );
-        }
-
-        const cleanSlug = (targetLoc?.regionName || placeName || "Satellite_View").replace(/[^a-zA-Z0-9_-]/g, "_");
-        const cleanName = `${cleanSlug}_Zoom${currentZoom}_Capture.jpg`;
-        let file = dataUrlToFile(dataUrl, cleanName);
-        let previewUrl = dataUrl;
-
-        try {
-          const opt = await optimizeImage(file, cleanName);
-          file = opt.file;
-          previewUrl = opt.previewUrl;
-        } catch (optErr) {
-          console.warn("Client image optimization fallback:", optErr);
-        }
-
-        const info: UploadedImageInfo = {
-          file,
-          previewUrl,
-          filename: cleanName,
-          format: "JPEG",
-          source: `${captureSource} — ${placeName}`,
-          bounds: effectiveBounds,
-        };
-
-        // Switch to 'ask' tab so the Imagery slot is immediately visible to user
-        setActiveTab("ask");
-
-        // Set prompt if empty
-        if (!question.trim()) {
-          const promptText = `Analyze land use, building structures, water bodies, and vegetation in this zoomed-in satellite area of ${placeName}.`;
-          setQuestion(promptText);
-          satQuery.setInput(promptText);
-        }
-
-        if (targetSlot === "image2") {
-          setImage2(info);
-        } else {
-          setImage1(info);
-        }
-      } catch (err) {
-        console.error("Failed to capture current map view:", err);
       } finally {
         setIsCapturingMap(false);
       }
     },
-    [satQuery.location, question, satQuery]
+    [captureMapSnapshotItem, question, satQuery]
   );
 
   const renderLeftPanel = () => {

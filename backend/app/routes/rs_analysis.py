@@ -508,19 +508,28 @@ async def analyze_remote_sensing(
                 answer_text = direct_ans
         elif wants_buildings:
             b_count = len(detected_buildings)
-            bldg_items_summary = "\n".join([
-                f"  {i}. House #{i}: Footprint ~{b.area_m2:.0f} m² at [{b.center_latlng[0]:.5f}° N, {b.center_latlng[1]:.5f}° E] (Confidence: {b.confidence:.0f}%)"
-                for i, b in enumerate(detected_buildings, 1)
-            ])
             zoom_val = analysis_boundary.get("zoom", 17) if analysis_boundary else 17
-            direct_ans = (
-                f"Total Houses Detected: {b_count}\n\n"
-                f"Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
-                f"Scale: Calibrated Zoom {zoom_val} high-resolution sector\n"
-                f"Validated Detections: {b_count} discrete structures verified and pinned on map.\n\n"
-                f"Identified House Coordinates & Footprints:\n"
-                f"{bldg_items_summary if bldg_items_summary else '  (No houses detected in this specific sector)'}"
-            )
+            if b_count == 0:
+                direct_ans = (
+                    f"Total Houses / Buildings Detected: 0\n\n"
+                    f"Observation Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                    f"Scale: Calibrated Zoom {zoom_val} observation sector\n"
+                    f"Detection Status: Morphological rooftop gradient scan completed. No discrete building structures were detected in this sector.\n"
+                    f"Terrain Context: The sector consists of open ground, natural landforms, or water surfaces without built-up rooftops."
+                )
+            else:
+                bldg_items_summary = "\n".join([
+                    f"  {i}. House #{i}: Footprint ~{b.area_m2:.0f} m² at [{b.center_latlng[0]:.5f}° N, {b.center_latlng[1]:.5f}° E] (Confidence: {b.confidence:.0f}%)"
+                    for i, b in enumerate(detected_buildings, 1)
+                ])
+                direct_ans = (
+                    f"Total Houses / Buildings Detected: {b_count}\n\n"
+                    f"Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                    f"Scale: Calibrated Zoom {zoom_val} high-resolution sector\n"
+                    f"Validated Detections: {b_count} discrete structures verified and pinned on map.\n\n"
+                    f"Identified House Coordinates & Footprints:\n"
+                    f"{bldg_items_summary}"
+                )
             if qwen_reasoning:
                 answer_text = f"{direct_ans}\n\nSpatial Intelligence & Reasoning:\n{qwen_reasoning}"
             else:
@@ -528,33 +537,27 @@ async def analyze_remote_sensing(
 
         elif wants_water:
             w_count = len(water_polygons)
-            state_census_info = ""
-            target_text = f"{question.lower()} {loc.displayName.lower()} {loc.state.lower()} {loc.regionName.lower()}"
-            matched_state_name = None
-            for sname, sdata in INDIA_STATE_WATER_BODIES_CENSUS.items():
-                if sname in target_text:
-                    matched_state_name = sname.title()
-                    state_census_info = (
-                        f"\n\n🏛️ Official State Water Census (Ministry of Jal Shakti, 1st Water Bodies Census):\n"
-                        f"• Total Water Bodies in {matched_state_name}: {sdata['count']:,}\n"
-                        f"• National Standing: Rank #{sdata['rank']} across Indian States & UTs\n"
-                        f"• Primary Water Typology: {sdata['major_types']}\n"
-                        f"• Earth Observation: Verified through multi-sensor optical and radar tracking."
-                    )
-                    break
-
-            water_items_summary = "\n".join([
-                f"  {i}. {w.name} ({w.type}): Area {w.area_m2:,.0f} m² ({w.area_km2:.3f} km²) at centroid [{w.centroid[0]:.5f}° N, {w.centroid[1]:.5f}° E]"
-                for i, w in enumerate(water_polygons, 1)
-            ])
-            direct_ans = (
-                f"Total Water Bodies Identified: {w_count if w_count > 0 else (matched_state_name and f'{matched_state_name} State Inventory') or 0}\n\n"
-                f"Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
-                f"Observation Sector Water Extent: {counts_summary.get('total_water_area_m2', 0):,.0f} m² ({counts_summary.get('total_water_area_km2', 0):.3f} km²)\n"
-                f"Validated Detections: {w_count} closed vector polygons delineated on map.{state_census_info}\n\n"
-                f"Delineated Water Bodies in Observation Extent:\n"
-                f"{water_items_summary if water_items_summary else '  (High-resolution satellite view analyzed; state-wide census referenced above)'}"
-            )
+            if w_count == 0:
+                direct_ans = (
+                    f"Total Water Bodies Detected in Sector: 0\n\n"
+                    f"Observation Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                    f"Surface Water Extent: 0.0 m² (0.000 km²)\n"
+                    f"Detection Status: High-precision optical NDWI & spectral absorption scan completed. No open water bodies (lakes, ponds, rivers, or reservoirs) were detected in this satellite observation frame.\n\n"
+                    f"Terrain Context: The observed sector consists of terrestrial land cover (built-up structures, roads, dry ground, or terrestrial vegetation) with no detectable open surface hydrology."
+                )
+            else:
+                water_items_summary = "\n".join([
+                    f"  {i}. {w.name} ({w.type}): Area {w.area_m2:,.0f} m² ({w.area_km2:.3f} km²) at centroid [{w.centroid[0]:.5f}° N, {w.centroid[1]:.5f}° E]"
+                    for i, w in enumerate(water_polygons, 1)
+                ])
+                direct_ans = (
+                    f"Total Water Bodies Identified: {w_count}\n\n"
+                    f"Observation Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                    f"Observation Sector Water Extent: {counts_summary.get('total_water_area_m2', 0):,.0f} m² ({counts_summary.get('total_water_area_km2', 0):.3f} km²)\n"
+                    f"Validated Detections: {w_count} closed vector polygons delineated on map.\n\n"
+                    f"Delineated Water Bodies in Observation Extent:\n"
+                    f"{water_items_summary}"
+                )
             if qwen_reasoning:
                 answer_text = f"{direct_ans}\n\nSurface Hydrology Intelligence:\n{qwen_reasoning}"
             else:
@@ -562,20 +565,29 @@ async def analyze_remote_sensing(
 
         elif wants_trees:
             v_count = len(detected_vegetation)
-            veg_items_summary = "\n".join([
-                f"  {i}. {v['label']}: Centroid [{v['center_latlng'][0]:.5f}° N, {v['center_latlng'][1]:.5f}° E] (Confidence: {v['confidence']}%)"
-                for i, v in enumerate(detected_vegetation[:15], 1)
-            ])
             zoom_val = analysis_boundary.get("zoom", 17) if analysis_boundary else 17
-            direct_ans = (
-                f"Total Vegetation & Tree Canopy Clusters Detected: {v_count}\n\n"
-                f"Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
-                f"Scale: Calibrated Zoom {zoom_val} observation sector\n"
-                f"Total Canopy Cover: {counts_summary.get('total_veg_area_m2', 0):,.0f} m² ({counts_summary.get('total_veg_area_km2', 0):.4f} km²)\n"
-                f"Validated Detections: {v_count} discrete stands isolated via Excess Green Index (ExG).\n\n"
-                f"Identified Vegetation Stands:\n"
-                f"{veg_items_summary if veg_items_summary else '  (No discrete tree clusters isolated in this sector)'}"
-            )
+            if v_count == 0:
+                direct_ans = (
+                    f"Total Vegetation & Tree Canopy Clusters Detected: 0\n\n"
+                    f"Observation Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                    f"Scale: Calibrated Zoom {zoom_val} observation sector\n"
+                    f"Detection Status: Excess Green Index (ExG) scan completed. No distinct tree canopy stands or forest patches were isolated in this sector.\n"
+                    f"Terrain Context: The sector consists of paved surfaces, built-up infrastructure, bare ground, or water."
+                )
+            else:
+                veg_items_summary = "\n".join([
+                    f"  {i}. {v['label']}: Centroid [{v['center_latlng'][0]:.5f}° N, {v['center_latlng'][1]:.5f}° E] (Confidence: {v['confidence']}%)"
+                    for i, v in enumerate(detected_vegetation[:15], 1)
+                ])
+                direct_ans = (
+                    f"Total Vegetation & Tree Canopy Clusters Detected: {v_count}\n\n"
+                    f"Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                    f"Scale: Calibrated Zoom {zoom_val} observation sector\n"
+                    f"Total Canopy Cover: {counts_summary.get('total_veg_area_m2', 0):,.0f} m² ({counts_summary.get('total_veg_area_km2', 0):.4f} km²)\n"
+                    f"Validated Detections: {v_count} discrete stands isolated via Excess Green Index (ExG).\n\n"
+                    f"Identified Vegetation Stands:\n"
+                    f"{veg_items_summary}"
+                )
             if qwen_reasoning:
                 answer_text = f"{direct_ans}\n\nVegetation & Canopy Intelligence:\n{qwen_reasoning}"
             else:
