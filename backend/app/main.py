@@ -40,5 +40,19 @@ app.include_router(vision_router)
 app.include_router(autosuggest_router)
 app.include_router(rs_router)
 app.include_router(boundary_router)
-# Reload trigger: SatQuery AI CV v2
+
+
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": "SatQuery AI Intelligence API",
+        "docs": "/docs",
+    }
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 
