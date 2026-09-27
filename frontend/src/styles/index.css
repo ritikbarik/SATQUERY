@@ -7234,5 +7234,194 @@ button {
   color: #22C55E;
 }
 
+/* ==============================================================================
+   OPTIMIZED MEDIA & RESPONSIVE MOBILE LAYOUT
+   ============================================================================== */
+
+@media (max-width: 1200px) {
+  .dashboard-grid.rs-grid-layout {
+    grid-template-columns: var(--sidebar-w) 320px 1fr;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+      "sidebar left-panel map"
+      "sidebar assistant right-panel";
+    height: auto;
+    min-height: 100vh;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: 78px;
+  }
+
+  .topbar {
+    height: 52px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .brand-cluster h1 {
+    font-size: 16px;
+    letter-spacing: -0.3px;
+  }
+
+  .brand-cluster p {
+    display: none;
+  }
+
+  .location-pill-btn {
+    padding: 4px 8px;
+    max-width: 150px;
+  }
+
+  .location-pill-text small {
+    display: none;
+  }
+
+  .location-pill-text strong {
+    font-size: 11px;
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .side-nav {
+    display: none !important;
+  }
+
+  /* Grid turns into streamlined vertical single-column stack on mobile */
+  .dashboard-grid.rs-grid-layout {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: unset;
+    padding: 8px;
+    gap: 12px;
+    overflow: visible;
+  }
+
+  /* Media viewport (Map / Before-After / Change Map) given primary top position */
+  .dashboard-grid.rs-grid-layout .center-viewport-wrapper {
+    order: 1;
+    width: 100%;
+    height: 48vh;
+    min-height: 320px;
+    max-height: 440px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .center-viewport-mode-strip {
+    padding: 6px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .center-mode-buttons {
+    width: 100%;
+    display: flex;
+    justify-content: stretch;
+  }
+
+  .center-mode-tab-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 11px;
+    justify-content: center;
+  }
+
+  /* Input stack */
+  .dashboard-grid.rs-grid-layout .left-stack {
+    order: 2;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .input-analysis-card {
+    height: auto;
+  }
+
+  .input-panel-scroll {
+    overflow-y: visible;
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .sih-mode-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  /* Right stack: Image Annotation Viewer */
+  .dashboard-grid.rs-grid-layout .right-stack {
+    order: 3;
+    width: 100%;
+    height: auto;
+    max-height: 520px;
+    border-radius: 12px;
+    overflow-y: auto;
+  }
+
+  .image-annotation-canvas-wrap {
+    min-height: 240px;
+    max-height: 340px;
+  }
+
+  /* Agentic response workspace */
+  .dashboard-grid.rs-grid-layout .agentic-workspace {
+    order: 4;
+    width: 100%;
+    height: auto;
+    min-height: 360px;
+    overflow: visible;
+  }
+
+  /* Swipe viewer & change map adaptations */
+  .before-after-swipe-container,
+  .change-map-container {
+    min-height: 320px;
+    height: 100%;
+  }
+
+  .swipe-header-strip {
+    padding: 4px;
+    gap: 4px;
+  }
+
+  .swipe-badge {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+
+  .swipe-badge .badge-file {
+    display: none;
+  }
+
+  /* Bottom nav visible and ergonomic on mobile */
+  .bottom-nav {
+    display: grid !important;
+    position: fixed;
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    z-index: 9999;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    border-radius: 16px;
+  }
+}
+
+
 
 

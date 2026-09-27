@@ -21,6 +21,7 @@ import {
   capturePlaceSatelliteImage,
   dataUrlToFile,
 } from "./services/mapSnapshot";
+import { optimizeImage } from "./utils/imageOptimizer";
 import { submitRemoteSensingAnalysis } from "./services/satQueryApi";
 import type {
   AnalysisMode,
@@ -45,8 +46,6 @@ const App = () => {
 
   // Center Viewport Mode: "map" | "before_after" | "change_map" (Section 30 of masterprompt.md)
   const [centerViewMode, setCenterViewMode] = useState<"map" | "before_after" | "change_map">("map");
-  const [historicalYear, setHistoricalYear] = useState<number>(2021);
-  const [currentYear, setCurrentYear] = useState<number>(2026);
   const [rsResult, setRsResult] = useState<RemoteSensingAnalysisResult | null>(null);
   const [focusedBoxId, setFocusedBoxId] = useState<string | null>(null);
 
@@ -300,10 +299,20 @@ const App = () => {
 
         const cleanSlug = (targetLoc?.regionName || placeName || "Satellite_View").replace(/[^a-zA-Z0-9_-]/g, "_");
         const cleanName = `${cleanSlug}_Zoom${currentZoom}_Capture.jpg`;
-        const file = dataUrlToFile(dataUrl, cleanName);
+        let file = dataUrlToFile(dataUrl, cleanName);
+        let previewUrl = dataUrl;
+
+        try {
+          const opt = await optimizeImage(file, cleanName);
+          file = opt.file;
+          previewUrl = opt.previewUrl;
+        } catch (optErr) {
+          console.warn("Client image optimization fallback:", optErr);
+        }
+
         const info: UploadedImageInfo = {
           file,
-          previewUrl: dataUrl,
+          previewUrl,
           filename: cleanName,
           format: "JPEG",
           source: `${captureSource} — ${placeName}`,
@@ -375,10 +384,6 @@ const App = () => {
             image2={image2}
             onImage1Change={setImage1}
             onImage2Change={setImage2}
-            historicalYear={historicalYear}
-            currentYear={currentYear}
-            onHistoricalYearChange={setHistoricalYear}
-            onCurrentYearChange={setCurrentYear}
             location={satQuery.location}
             onSearchAndCapture={handleSearchAndCapture}
             onCaptureCurrentView={handleCaptureCurrentView}
@@ -447,11 +452,6 @@ const App = () => {
                 <span>Change Map</span>
               </button>
             </div>
-
-            <div className="center-mode-context-pill">
-              <span>Timeframe:</span>
-              <strong>{historicalYear} → {currentYear}</strong>
-            </div>
           </div>
 
           {/* Conditional Center Viewports */}
@@ -459,8 +459,6 @@ const App = () => {
             <BeforeAfterSwipeViewer
               image1={image1}
               image2={image2}
-              historicalYear={historicalYear}
-              currentYear={currentYear}
               location={satQuery.location}
               onCaptureSlot={handleCaptureCurrentView}
               isCapturing={isCapturingMap}
@@ -471,8 +469,6 @@ const App = () => {
               rsResult={rsResult}
               image1={image1}
               image2={image2}
-              historicalYear={historicalYear}
-              currentYear={currentYear}
             />
           ) : (
             <SatelliteMap

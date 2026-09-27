@@ -494,11 +494,16 @@ export const SatelliteMap = ({
           );
         })}
 
-        {/* HIGHLIGHT DETECTED FEATURES ON MAP */}
+        {/* HIGHLIGHT DETECTED FEATURES ON MAP (Non-duplicate specific visual evidence) */}
         {groundingBoxes && groundingBoxes.length > 0 && effectiveBounds && (() => {
           const [south, north, west, east] = effectiveBounds;
+          const existingBuildingIds = new Set(detectedBuildings?.map(b => b.id) || []);
+          const existingWaterIds = new Set(waterPolygons?.map(w => w.id) || []);
+          const uniqueGroundingBoxes = groundingBoxes.filter(
+            box => !existingBuildingIds.has(box.id) && !existingWaterIds.has(box.id)
+          );
 
-          return groundingBoxes.map((box) => {
+          return uniqueGroundingBoxes.map((box) => {
             const [ymin, xmin, ymax, xmax] = box.box_2d;
             const latMin = north - (ymax / 1000) * (north - south);
             const latMax = north - (ymin / 1000) * (north - south);
@@ -513,13 +518,13 @@ export const SatelliteMap = ({
                   bounds={[[latMin, lngMin], [latMax, lngMax]]}
                   pathOptions={{
                     color: isFocused ? "#F59E0B" : "#38BDF8",
-                    weight: isFocused ? 3.5 : 2.5,
+                    weight: isFocused ? 3.5 : 2.0,
                     fillColor: isFocused ? "#D97706" : "#0284C7",
-                    fillOpacity: isFocused ? 0.32 : 0.2,
+                    fillOpacity: isFocused ? 0.35 : 0.18,
                     dashArray: isFocused ? "4, 2" : "6, 4",
                   }}
                 >
-                  <Tooltip permanent direction="top" className="grounding-map-tooltip">
+                  <Tooltip permanent={isFocused} direction="top" className="grounding-map-tooltip">
                     <div className={`grounding-tooltip-card ${isFocused ? "focused" : ""}`}>
                       <span className="grounding-dot" />
                       <strong>{box.label}</strong>
@@ -531,7 +536,7 @@ export const SatelliteMap = ({
                 {/* Center Reticle Marker */}
                 <CircleMarker
                   center={[(latMin + latMax) / 2, (lngMin + lngMax) / 2]}
-                  radius={isFocused ? 7 : 5}
+                  radius={isFocused ? 7 : 4}
                   pathOptions={{
                     color: isFocused ? "#F59E0B" : "#38BDF8",
                     fillColor: "#FFFFFF",

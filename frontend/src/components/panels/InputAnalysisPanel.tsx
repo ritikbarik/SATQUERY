@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { AnalysisMode, LocationMetadata, UploadedImageInfo } from "../../types/satquery";
 import { Card } from "../common/Card";
+import { optimizeImage } from "../../utils/imageOptimizer";
 
 interface InputAnalysisPanelProps {
   mode: AnalysisMode;
@@ -35,10 +36,6 @@ interface InputAnalysisPanelProps {
   onQuestionChange: (q: string) => void;
   onAnalyze: () => void;
   isProcessing: boolean;
-  historicalYear?: number;
-  currentYear?: number;
-  onHistoricalYearChange?: (year: number) => void;
-  onCurrentYearChange?: (year: number) => void;
 }
 
 const MODE_META: Record<AnalysisMode, { label: string; helper: string; icon: React.ReactNode }> = {
@@ -75,10 +72,6 @@ export const InputAnalysisPanel: React.FC<InputAnalysisPanelProps> = ({
   onQuestionChange,
   onAnalyze,
   isProcessing,
-  historicalYear = 2021,
-  currentYear = 2026,
-  onHistoricalYearChange,
-  onCurrentYearChange,
 }) => {
   const file1Ref = useRef<HTMLInputElement>(null);
   const file2Ref = useRef<HTMLInputElement>(null);
@@ -149,15 +142,29 @@ export const InputAnalysisPanel: React.FC<InputAnalysisPanelProps> = ({
     onSearchAndCapture?.(fullName, targetSlot, s.bbox, s.lat, s.lng);
   };
 
-  const handleFile = (file: File, slot: "image1" | "image2") => {
-    const info: UploadedImageInfo = {
-      file,
-      previewUrl: URL.createObjectURL(file),
-      filename: file.name,
-      format: file.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
-      notes: ["User uploaded raster/image file."],
-    };
-    slot === "image1" ? onImage1Change(info) : onImage2Change(info);
+  const handleFile = async (file: File, slot: "image1" | "image2") => {
+    try {
+      const opt = await optimizeImage(file, file.name);
+      const info: UploadedImageInfo = {
+        file: opt.file,
+        previewUrl: opt.previewUrl,
+        filename: file.name,
+        format: file.name.split(".").pop()?.toUpperCase() || "JPEG",
+        notes: [
+          `Optimized image for mobile & CV analysis (${opt.width}x${opt.height} px, ${(opt.optimizedSize / 1024).toFixed(0)} KB).`,
+        ],
+      };
+      slot === "image1" ? onImage1Change(info) : onImage2Change(info);
+    } catch {
+      const info: UploadedImageInfo = {
+        file,
+        previewUrl: URL.createObjectURL(file),
+        filename: file.name,
+        format: file.name.split(".").pop()?.toUpperCase() || "UNKNOWN",
+        notes: ["User uploaded raster/image file."],
+      };
+      slot === "image1" ? onImage1Change(info) : onImage2Change(info);
+    }
   };
 
   const submitCapture = (event: React.FormEvent) => {
@@ -195,43 +202,6 @@ export const InputAnalysisPanel: React.FC<InputAnalysisPanelProps> = ({
               </button>
             ))}
           </div>
-
-          {/* Temporal Comparison Controls (Section 29 of masterprompt.md) */}
-          {mode === "before_after" && (
-            <div className="temporal-controls-row">
-              <div className="temporal-field">
-                <label>Historical (T1)</label>
-                <select
-                  value={historicalYear}
-                  onChange={(e) => onHistoricalYearChange?.(Number(e.target.value))}
-                  className="temporal-select"
-                >
-                  {[2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025].map((y) => (
-                    <option key={y} value={y}>
-                      {y} (T1 Baseline)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="temporal-field">
-                <label>Current (T2)</label>
-                <select
-                  value={currentYear}
-                  onChange={(e) => onCurrentYearChange?.(Number(e.target.value))}
-                  className="temporal-select"
-                >
-                  {[2024, 2025, 2026, 2027].map((y) => (
-                    <option key={y} value={y}>
-                      {y} (T2 Current)
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="temporal-hint" style={{ gridColumn: "span 2" }}>
-                <span>💡 Comparing satellite rasters from {historicalYear} to {currentYear}.</span>
-              </div>
-            </div>
-          )}
         </section>
 
         <section className="sih-section">
@@ -406,7 +376,6 @@ export const InputAnalysisPanel: React.FC<InputAnalysisPanelProps> = ({
               onQuestionChange(val);
               if (/last\s*5\s*years|\b5\s*years\b|\b5-year\b/i.test(val)) {
                 if (mode !== "before_after") onModeChange("before_after");
-                if (onHistoricalYearChange) onHistoricalYearChange(currentYear - 5);
               }
             }}
             placeholder="Ask a remote-sensing question, e.g. identify water bodies, count houses, describe land cover, or detect change."

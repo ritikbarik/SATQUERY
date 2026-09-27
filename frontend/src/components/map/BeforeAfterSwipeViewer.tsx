@@ -14,10 +14,8 @@ import {
 import type { LocationMetadata, UploadedImageInfo } from "../../types/satquery";
 
 interface BeforeAfterSwipeViewerProps {
-  image1?: UploadedImageInfo | null; // Historical (T1)
-  image2?: UploadedImageInfo | null; // Current (T2)
-  historicalYear?: number | string;
-  currentYear?: number | string;
+  image1?: UploadedImageInfo | null; // Baseline (T1)
+  image2?: UploadedImageInfo | null; // Comparison (T2)
   location?: LocationMetadata;
   onCaptureSlot?: (slot: "image1" | "image2") => void;
   isCapturing?: boolean;
@@ -26,8 +24,6 @@ interface BeforeAfterSwipeViewerProps {
 export const BeforeAfterSwipeViewer: React.FC<BeforeAfterSwipeViewerProps> = ({
   image1,
   image2,
-  historicalYear = 2021,
-  currentYear = 2026,
   location,
   onCaptureSlot,
   isCapturing = false,
@@ -154,8 +150,8 @@ export const BeforeAfterSwipeViewer: React.FC<BeforeAfterSwipeViewerProps> = ({
       <div className="swipe-header-strip">
         <div className="swipe-badge swipe-badge-historical">
           <Calendar size={13} />
-          <span className="badge-year">{historicalYear}</span>
-          <span className="badge-label">Historical Baseline</span>
+          <span className="badge-year">T1</span>
+          <span className="badge-label">Baseline Image</span>
           {image1 && <span className="badge-file">{image1.filename}</span>}
         </div>
 
@@ -165,8 +161,8 @@ export const BeforeAfterSwipeViewer: React.FC<BeforeAfterSwipeViewerProps> = ({
 
         <div className="swipe-badge swipe-badge-current">
           <Sparkles size={13} />
-          <span className="badge-year">{currentYear}</span>
-          <span className="badge-label">Current Satellite View</span>
+          <span className="badge-year">T2</span>
+          <span className="badge-label">Comparison Image</span>
           {image2 && <span className="badge-file">{image2.filename}</span>}
         </div>
       </div>
@@ -187,12 +183,12 @@ export const BeforeAfterSwipeViewer: React.FC<BeforeAfterSwipeViewerProps> = ({
         >
           <img
             src={img2Src}
-            alt={`Current Satellite ${currentYear}`}
+            alt="Comparison Satellite View"
             className="swipe-image"
             draggable={false}
           />
           <div className="swipe-watermark watermark-current">
-            <span>{currentYear} Current View</span>
+            <span>T2 Comparison View</span>
           </div>
         </div>
 
@@ -207,12 +203,12 @@ export const BeforeAfterSwipeViewer: React.FC<BeforeAfterSwipeViewerProps> = ({
         >
           <img
             src={img1Src}
-            alt={`Historical Satellite ${historicalYear}`}
+            alt="Baseline Satellite View"
             className="swipe-image historical-filter"
             draggable={false}
           />
           <div className="swipe-watermark watermark-historical">
-            <span>{historicalYear} Historical View</span>
+            <span>T1 Baseline View</span>
           </div>
         </div>
 
@@ -334,7 +330,7 @@ export const BeforeAfterSwipeViewer: React.FC<BeforeAfterSwipeViewerProps> = ({
       <div className="swipe-footnote">
         <span className="live-dot" />
         <span>
-          Bi-Temporal Swipe Analysis • {location?.displayName || "All-India Extent"} • {historicalYear} vs {currentYear}
+          Bi-Temporal Swipe Analysis • {location?.displayName || "All-India Extent"} • T1 Baseline vs T2 Recent
         </span>
       </div>
     </div>

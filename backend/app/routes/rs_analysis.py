@@ -168,13 +168,30 @@ async def analyze_remote_sensing(
     doing_count = is_counting_query(question)
     feature_type = detect_count_feature_type(question)
 
+    is_count_all = any(phrase in q_lower for phrase in [
+        "how many things", "count everything", "all things", "how many objects",
+        "count objects", "what objects", "how many items", "count all",
+        "everything in this image", "things are in this image", "what is in this",
+        "how many total", "identify all", "list all objects"
+    ])
+
     wants_buildings = (
-        feature_type == "building"
-        or any(w in q_lower for w in ["building", "house", "roof", "structure", "residential", "shed", "construction"])
+        not is_count_all and (
+            feature_type == "building"
+            or any(w in q_lower for w in ["building", "house", "roof", "structure", "residential", "shed", "construction", "home", "settlement"])
+        )
     )
     wants_water = (
-        feature_type in ["water", "small_water", "large_water"]
-        or any(w in q_lower for w in ["water", "lake", "river", "pond", "reservoir", "wetland", "canal"])
+        not is_count_all and (
+            feature_type in ["water", "small_water", "large_water"]
+            or any(w in q_lower for w in ["water", "lake", "river", "pond", "reservoir", "wetland", "canal", "stream"])
+        )
+    )
+    wants_trees = (
+        not is_count_all and (
+            feature_type in ["tree", "vegetation", "forest"]
+            or any(w in q_lower for w in ["tree", "forest", "canopy", "vegetation", "greenery", "plant", "plantation", "wood"])
+        )
     )
 
     models_used: list[str] = []
@@ -184,12 +201,18 @@ async def analyze_remote_sensing(
     elif analysis_mode == "optical_sar":
         task_name = "Optical + SAR Cross-Modal Analysis"
         models_used = ["CrossModal-Optical-SAR-Aligner", "C-Band-SAR-Dielectric-Engine"]
+    elif is_count_all:
+        task_name = "Comprehensive Multi-Class Object Inventory & Counting"
+        models_used = ["MultiClass-Geospatial-Detector", "Morphological-Rooftop-Detector", "Spectral-Water-Segmenter", "Canopy-ExG-Analyzer"]
     elif wants_buildings:
         task_name = "Dedicated Building Footprint Detection & Quantification"
         models_used = ["Morphological-Rooftop-Detector", "NMS-Spatial-Deduplicator", "Vision-Language-Reasoner"]
     elif wants_water:
         task_name = "Dedicated Water-Body Delineation & Semantic Segmentation"
         models_used = ["Spectral-Water-Segmenter", "Contour-Polygon-Extractor", "Vision-Language-Reasoner"]
+    elif wants_trees:
+        task_name = "Dedicated Vegetation Canopy & Tree Cluster Detection"
+        models_used = ["Canopy-ExG-Analyzer", "Contour-Polygon-Extractor", "Vision-Language-Reasoner"]
     else:
         task_name = "Single-Image Geospatial VQA"
         models_used = ["RSVQA-Specialist-v2", "Satellite-Vision-Specialist"]
@@ -200,6 +223,7 @@ async def analyze_remote_sensing(
     annotated_features: list[AnnotatedFeature] = []
     detected_buildings: list[BuildingDetectionItem] = []
     water_polygons: list[WaterBodyPolygon] = []
+    detected_vegetation: list[dict[str, Any]] = []
     counts_summary: dict[str, Any] = {}
     actual_confidence = 88.0
     answer_text = ""
@@ -208,9 +232,88 @@ async def analyze_remote_sensing(
     reg_profile = satellite_service.analyze_spectral_profile(loc)
 
     # -----------------------------------------------------------------------
-    # PIPELINE 1: DEDICATED BUILDING DETECTION (WITH NMS & TILING)
+    # PIPELINE 0: MULTI-CLASS OBJECT CENSUS ("HOW MANY THINGS ARE IN THIS IMAGE")
     # -----------------------------------------------------------------------
-    if wants_buildings and img1_bytes:
+    if is_count_all and img1_bytes:
+        all_res = cv_detector.detect_all_objects(img1_bytes, bounds=bounds_for_cv)
+        actual_confidence = all_res.get("confidence_score", 91.0)
+        counts_summary = all_res.get("breakdown", {})
+        counts_summary["total_objects"] = all_res.get("total_count", 0)
+        notes.extend(all_res.get("notes", []))
+
+        # Buildings
+        for b in all_res.get("buildings", []):
+            detected_buildings.append(BuildingDetectionItem(
+                id=b["id"],
+                label=b["label"],
+                confidence=b["confidence"],
+                box_pixel=b["box_pixel"],
+                box_1000=b["box_1000"],
+                geo_bounds=b["geo_bounds"],
+                center_latlng=b["center_latlng"],
+                area_m2=b["area_m2"],
+            ))
+            annotated_features.append(AnnotatedFeature(
+                id=b["id"],
+                type="built_up",
+                label=b["label"],
+                confidence=b["confidence"],
+                box_2d=b["box_1000"],
+                description=f"Building footprint (~{b['area_m2']:.0f} m²)",
+                color="#F97316",
+            ))
+
+        # Water bodies
+        for w_item in all_res.get("water_bodies", []):
+            water_polygons.append(WaterBodyPolygon(
+                id=w_item["id"],
+                name=w_item["name"],
+                type=w_item["type"],
+                confidence=w_item["confidence"],
+                area_m2=w_item["area_m2"],
+                area_km2=w_item["area_km2"],
+                perimeter_m=w_item["perimeter_m"],
+                centroid=w_item["centroid"],
+                geojson=w_item["geojson"],
+                leaflet_coordinates=w_item["leaflet_coordinates"],
+                box_1000=w_item["box_1000"],
+                bounds=w_item["bounds"],
+                ndwi_estimate=w_item["ndwi_estimate"],
+            ))
+            annotated_features.append(AnnotatedFeature(
+                id=w_item["id"],
+                type="water",
+                label=f"{w_item['name']} ({w_item['area_m2']:,.0f} m²)",
+                confidence=w_item["confidence"],
+                box_2d=w_item["box_1000"],
+                description=f"Surface water body ({w_item['area_m2']:,.0f} m²)",
+                color="#38BDF8",
+            ))
+
+        # Vegetation
+        for v in all_res.get("vegetation", []):
+            detected_vegetation.append(v)
+            grounding_boxes.append(GroundingBox(
+                id=v["id"],
+                label=v["label"],
+                confidence=v["confidence"],
+                box_2d=v["box_1000"],
+                description=f"Vegetation canopy patch ({v['area_m2']:.0f} m²)",
+            ))
+            annotated_features.append(AnnotatedFeature(
+                id=v["id"],
+                type="vegetation",
+                label=v["label"],
+                confidence=v["confidence"],
+                box_2d=v["box_1000"],
+                description=f"Tree stand / canopy patch (~{v['area_m2']:.0f} m²)",
+                color="#10B981",
+            ))
+
+    # -----------------------------------------------------------------------
+    # PIPELINE 1: DEDICATED BUILDING DETECTION (ONLY WHEN ASKED FOR BUILDINGS)
+    # -----------------------------------------------------------------------
+    elif wants_buildings and img1_bytes:
         b_res = cv_detector.detect_buildings(img1_bytes, bounds=bounds_for_cv, min_confidence=0.55, use_tiling=True)
         raw_b_list = b_res.get("buildings", [])
         b_count = len(raw_b_list)
@@ -229,14 +332,6 @@ async def analyze_remote_sensing(
                 center_latlng=b["center_latlng"],
                 area_m2=b["area_m2"],
             ))
-            # Also populate canvas/Leaflet grounding boxes
-            grounding_boxes.append(GroundingBox(
-                id=b["id"],
-                label=b["label"],
-                confidence=b["confidence"],
-                box_2d=b["box_1000"],
-                description=f"Building footprint (~{b['area_m2']:.0f} m²) validated via morphological filtering.",
-            ))
             annotated_features.append(AnnotatedFeature(
                 id=b["id"],
                 type="built_up",
@@ -244,13 +339,13 @@ async def analyze_remote_sensing(
                 confidence=b["confidence"],
                 box_2d=b["box_1000"],
                 description=f"Building structure footprint (~{b['area_m2']:.0f} m²)",
-                color="#F97316",  # orange
+                color="#F97316",
             ))
 
     # -----------------------------------------------------------------------
-    # PIPELINE 2: DEDICATED WATER BODY SEMANTIC SEGMENTATION (INTO POLYGONS)
+    # PIPELINE 2: DEDICATED WATER BODY SEGMENTATION (ONLY WHEN ASKED FOR WATER)
     # -----------------------------------------------------------------------
-    if wants_water and img1_bytes:
+    elif wants_water and img1_bytes:
         w_res = cv_detector.segment_water_bodies(img1_bytes, bounds=bounds_for_cv, min_area_m2=30.0)
         raw_w_list = w_res.get("water_bodies", [])
         w_count = len(raw_w_list)
@@ -276,13 +371,6 @@ async def analyze_remote_sensing(
                 bounds=w_item["bounds"],
                 ndwi_estimate=w_item["ndwi_estimate"],
             ))
-            grounding_boxes.append(GroundingBox(
-                id=w_item["id"],
-                label=f"{w_item['name']} ({w_item['area_m2']:,.0f} m²)",
-                confidence=w_item["confidence"],
-                box_2d=w_item["box_1000"],
-                description=f"Surface water body ({w_item['area_m2']:,.0f} m²) delineated into vector polygon.",
-            ))
             annotated_features.append(AnnotatedFeature(
                 id=w_item["id"],
                 type="water",
@@ -290,7 +378,38 @@ async def analyze_remote_sensing(
                 confidence=w_item["confidence"],
                 box_2d=w_item["box_1000"],
                 description=f"Surface water body ({w_item['area_m2']:,.0f} m²)",
-                color="#38BDF8",  # cyan
+                color="#38BDF8",
+            ))
+
+    # -----------------------------------------------------------------------
+    # PIPELINE 2B: DEDICATED VEGETATION CANOPY (ONLY WHEN ASKED FOR TREES)
+    # -----------------------------------------------------------------------
+    elif wants_trees and img1_bytes:
+        veg_res = cv_detector.detect_vegetation_clusters(img1_bytes, bounds=bounds_for_cv, min_area_m2=25.0)
+        v_list = veg_res.get("vegetation", [])
+        actual_confidence = veg_res.get("confidence_score", 91.0)
+        counts_summary["vegetation_clusters"] = len(v_list)
+        counts_summary["total_veg_area_m2"] = veg_res.get("total_area_m2", 0.0)
+        counts_summary["total_veg_area_km2"] = veg_res.get("total_area_km2", 0.0)
+        notes.extend(veg_res.get("notes", []))
+
+        for v in v_list:
+            detected_vegetation.append(v)
+            grounding_boxes.append(GroundingBox(
+                id=v["id"],
+                label=v["label"],
+                confidence=v["confidence"],
+                box_2d=v["box_1000"],
+                description=f"Vegetation canopy patch ({v['area_m2']:.0f} m²)",
+            ))
+            annotated_features.append(AnnotatedFeature(
+                id=v["id"],
+                type="vegetation",
+                label=v["label"],
+                confidence=v["confidence"],
+                box_2d=v["box_1000"],
+                description=f"Tree stand / canopy patch (~{v['area_m2']:.0f} m²)",
+                color="#10B981",
             ))
 
     # -----------------------------------------------------------------------
@@ -350,7 +469,29 @@ async def analyze_remote_sensing(
             analysis_boundary=analysis_boundary,
         )
 
-        if wants_buildings and wants_water:
+        if is_count_all:
+            b_count = len(detected_buildings)
+            w_count = len(water_polygons)
+            v_count = len(detected_vegetation)
+            total_objs = counts_summary.get("total_objects", b_count + w_count + v_count)
+            zoom_val = analysis_boundary.get("zoom", 17) if analysis_boundary else 17
+
+            direct_ans = (
+                f"Multi-Class Object Census & Inventory — {loc.displayName}\n\n"
+                f"Observation Scale: Calibrated Zoom {zoom_val} high-resolution sector\n"
+                f"Coordinates: [{loc.lat:.4f}° N, {loc.lng:.4f}° E]\n\n"
+                f"📊 TOTAL THINGS / OBJECTS DETECTED: {total_objs}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"• 🏠 Buildings & Rooftop Structures: {b_count}\n"
+                f"• 💧 Water Bodies & Ponds: {w_count}\n"
+                f"• 🌳 Tree Stands & Canopy Clusters: {v_count}\n\n"
+                f"Every detected object has been isolated with geographic coordinates and highlighted with distinct visual grounding on the map and evidence viewer."
+            )
+            if qwen_reasoning:
+                answer_text = f"{direct_ans}\n\nSpatial Intelligence & Reasoning:\n{qwen_reasoning}"
+            else:
+                answer_text = direct_ans
+        elif wants_buildings and wants_water:
             b_count = len(detected_buildings)
             w_count = len(water_polygons)
             zoom_val = analysis_boundary.get("zoom", 17) if analysis_boundary else 17
@@ -359,7 +500,7 @@ async def analyze_remote_sensing(
                 f"Observation Extent: [{loc.lat:.4f}° N, {loc.lng:.4f}° E] (Zoom {zoom_val})\n"
                 f"• Buildings Detected: {b_count} discrete structures verified via morphological NMS.\n"
                 f"• Water Bodies Delineated: {w_count} surface bodies segmented ({counts_summary.get('total_water_area_m2', 0):,.0f} m²).\n"
-                f"• Grounding Features: {len(grounding_boxes)} features mapped with geographic coordinates."
+                f"• Grounding Features: {len(annotated_features)} features mapped with geographic coordinates."
             )
             if qwen_reasoning:
                 answer_text = f"{direct_ans}\n\nSpatial Intelligence & Reasoning:\n{qwen_reasoning}"
@@ -416,6 +557,27 @@ async def analyze_remote_sensing(
             )
             if qwen_reasoning:
                 answer_text = f"{direct_ans}\n\nSurface Hydrology Intelligence:\n{qwen_reasoning}"
+            else:
+                answer_text = direct_ans
+
+        elif wants_trees:
+            v_count = len(detected_vegetation)
+            veg_items_summary = "\n".join([
+                f"  {i}. {v['label']}: Centroid [{v['center_latlng'][0]:.5f}° N, {v['center_latlng'][1]:.5f}° E] (Confidence: {v['confidence']}%)"
+                for i, v in enumerate(detected_vegetation[:15], 1)
+            ])
+            zoom_val = analysis_boundary.get("zoom", 17) if analysis_boundary else 17
+            direct_ans = (
+                f"Total Vegetation & Tree Canopy Clusters Detected: {v_count}\n\n"
+                f"Location: {loc.displayName} (Latitude: {loc.lat:.4f}° N, Longitude: {loc.lng:.4f}° E)\n"
+                f"Scale: Calibrated Zoom {zoom_val} observation sector\n"
+                f"Total Canopy Cover: {counts_summary.get('total_veg_area_m2', 0):,.0f} m² ({counts_summary.get('total_veg_area_km2', 0):.4f} km²)\n"
+                f"Validated Detections: {v_count} discrete stands isolated via Excess Green Index (ExG).\n\n"
+                f"Identified Vegetation Stands:\n"
+                f"{veg_items_summary if veg_items_summary else '  (No discrete tree clusters isolated in this sector)'}"
+            )
+            if qwen_reasoning:
+                answer_text = f"{direct_ans}\n\nVegetation & Canopy Intelligence:\n{qwen_reasoning}"
             else:
                 answer_text = direct_ans
         else:

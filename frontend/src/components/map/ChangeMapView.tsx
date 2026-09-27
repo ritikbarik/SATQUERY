@@ -17,8 +17,6 @@ interface ChangeMapViewProps {
   rsResult?: RemoteSensingAnalysisResult | null;
   image1?: UploadedImageInfo | null;
   image2?: UploadedImageInfo | null;
-  historicalYear?: number | string;
-  currentYear?: number | string;
 }
 
 export const ChangeMapView: React.FC<ChangeMapViewProps> = ({
@@ -27,8 +25,6 @@ export const ChangeMapView: React.FC<ChangeMapViewProps> = ({
   rsResult,
   image1: _image1,
   image2: _image2,
-  historicalYear = 2021,
-  currentYear = 2026,
 }) => {
   // Layer toggles according to section 31
   const [layers, setLayers] = useState({
@@ -62,9 +58,6 @@ export const ChangeMapView: React.FC<ChangeMapViewProps> = ({
         <div className="change-map-title">
           <Layers size={15} className="text-cyan" />
           <span>Bi-Temporal Change Map</span>
-          <span className="change-timeframe-tag">
-            {historicalYear} → {currentYear}
-          </span>
         </div>
 
         {/* Layer Toggles Strip */}
@@ -78,7 +71,7 @@ export const ChangeMapView: React.FC<ChangeMapViewProps> = ({
             <span className={`toggle-check ${layers.current ? "checked" : ""}`}>
               {layers.current ? <Check size={11} /> : null}
             </span>
-            <span>Current ({currentYear})</span>
+            <span>Current (T2)</span>
           </button>
 
           <button
@@ -90,7 +83,7 @@ export const ChangeMapView: React.FC<ChangeMapViewProps> = ({
             <span className={`toggle-check ${layers.historical ? "checked" : ""}`}>
               {layers.historical ? <Check size={11} /> : null}
             </span>
-            <span>Historical ({historicalYear})</span>
+            <span>Historical (T1)</span>
           </button>
 
           <button
@@ -296,9 +289,7 @@ export const ChangeMapView: React.FC<ChangeMapViewProps> = ({
         <div className="change-map-legend-card">
           <div className="legend-header">
             <span className="legend-title">CHANGE DETECTION LEGEND</span>
-            <span className="legend-period">
-              {historicalYear} → {currentYear}
-            </span>
+            <span className="legend-period">T1 Baseline vs T2 Recent</span>
           </div>
 
           <div className="legend-items">

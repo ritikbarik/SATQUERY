@@ -745,7 +745,7 @@ export const ImageAnnotationViewer: React.FC<ImageAnnotationViewerProps> = ({
         <div className="iav-change-summary-card">
           <div className="iav-change-summary-header">
             <span className="iav-change-title">CHANGE SUMMARY</span>
-            <span className="iav-change-period">2021 → 2026</span>
+            <span className="iav-change-period">T1 Baseline vs T2 Recent</span>
           </div>
           <div className="iav-change-grid">
             <div className="iav-change-stat-box">
